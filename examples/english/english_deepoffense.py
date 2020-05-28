@@ -9,7 +9,7 @@ from sklearn.preprocessing import LabelEncoder
 from deepoffense.classification.classification_model import ClassificationModel
 from examples.english.global_args import global_args
 
-model = ClassificationModel("xlmroberta", "xlm-roberta-base",  use_cuda=torch.cuda.is_available(),
+model = ClassificationModel("bert", "bert-base-multilingual-cased",  use_cuda=torch.cuda.is_available(),
                            args=global_args)
 
 data = pd.read_csv('examples/english/data/olid-training-v1.0.tsv', sep="\t",  quoting=csv.QUOTE_NONE)
