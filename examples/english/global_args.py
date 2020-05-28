@@ -21,7 +21,7 @@ global_args = {
     "fp16": False,
     "fp16_opt_level": "O1",
     "gradient_accumulation_steps": 1,
-    "learning_rate": 2e-5,
+    "learning_rate": 4e-5,
     "logging_steps": 50,
     "manual_seed": 777,
     "max_grad_norm": 1.0,
