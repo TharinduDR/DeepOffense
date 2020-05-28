@@ -18,7 +18,7 @@ global_args = {
     "evaluate_during_training": True,
     "evaluate_during_training_steps": 800,
     "evaluate_during_training_verbose": False,
-    "fp16": True,
+    "fp16": False,
     "fp16_opt_level": "O1",
     "gradient_accumulation_steps": 1,
     "learning_rate": 1e-5,
