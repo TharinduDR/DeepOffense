@@ -28,3 +28,4 @@ model = ClassificationModel("xlmroberta", global_args["best_model_dir"],
 
 
 result, model_outputs, wrong_predictions = model.eval_model(test, f1=sklearn.metrics.f1_score, accuracy=sklearn.metrics.accuracy_score)
+print(result)
