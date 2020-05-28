@@ -12,7 +12,7 @@ from examples.english.global_args import global_args
 model = ClassificationModel("xlmroberta", "xlm-roberta-large",  use_cuda=torch.cuda.is_available(),
                            args=global_args)
 
-data = pd.read_csv('data/olid-training-v1.0.tsv', sep="\t",  quoting=csv.QUOTE_NONE)
+data = pd.read_csv('examples/english/data/olid-training-v1.0.tsv', sep="\t",  quoting=csv.QUOTE_NONE)
 data = data.rename(columns={'tweet': 'text', 'subtask_a': 'label'}).dropna()
 data = data[['text', 'label']]
 
