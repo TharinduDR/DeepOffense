@@ -8,8 +8,8 @@ DEV_EVAL_FILE = 'dev_eval.txt'
 RESULT_FILE = "result.csv"
 SUBMISSION_FOLDER = "transformers"
 SUBMISSION_FILE = "transformers"
-MODEL_TYPE = "bert"
-MODEL_NAME = "bert-large-cased"
+MODEL_TYPE = "xlmroberta"
+MODEL_NAME = "xlm-roberta-large"
 LANGUAGE_FINETUNE =True
 SEED = 777
 
@@ -22,7 +22,7 @@ args = {
 
     'fp16': False,
     'fp16_opt_level': 'O1',
-    'max_seq_length': 152,  # 128
+    'max_seq_length': 128,  # 128
     'train_batch_size': 8,
     'gradient_accumulation_steps': 1,
     'eval_batch_size': 8,
