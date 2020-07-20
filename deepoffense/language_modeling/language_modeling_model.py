@@ -54,7 +54,7 @@ from transformers.data.datasets.language_modeling import TextDataset, LineByLine
 
 from deepoffense.classification.transformer_models.args.model_args import LanguageModelingArgs
 from deepoffense.custom_models.models import ElectraForLanguageModelingModel
-from deepoffense.language_modeling.language_modeling_utils import mask_tokens
+from deepoffense.language_modeling.language_modeling_utils import mask_tokens, SimpleDataset
 
 try:
     import wandb
