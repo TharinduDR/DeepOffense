@@ -10,7 +10,7 @@ SUBMISSION_FOLDER = "transformers"
 SUBMISSION_FILE = "transformers"
 MODEL_TYPE = "xlmroberta"
 MODEL_NAME = "xlm-roberta-large"
-LANGUAGE_FINETUNE =True
+LANGUAGE_FINETUNE =False
 SEED = 777
 
 # training instances = 7000 > if batch size=8, batches = 875 > evaluate during training steps -> 80 or 175
