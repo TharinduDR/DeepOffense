@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import time
-
+import csv
 import numpy as np
 import pandas as pd
 import sklearn
@@ -22,9 +22,9 @@ if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.maked
     os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER))
 
 train = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-train.csv", sep='\t',
-                    header=None, names=["labels", "text"])
+                    header=None, names=["labels", "text"], quoting=csv.QUOTE_NONE)
 dev = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-dev.csv", sep='\t',
-                  header=None, names=["labels", "text"])
+                  header=None, names=["labels", "text"], quoting=csv.QUOTE_NONE)
 
 
 if LANGUAGE_FINETUNE:
@@ -87,6 +87,6 @@ dev['labels'] = decode(dev['labels'])
 
 time.sleep(5)
 
-print_information(dev, "labels", "predictions")
+print_information(dev, "predictions", "labels")
 
 
