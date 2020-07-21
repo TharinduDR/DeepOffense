@@ -7,7 +7,7 @@ import csv
 from sklearn.preprocessing import LabelEncoder
 
 from deepoffense.classification.classification_model import ClassificationModel
-from examples.english.global_args import global_args
+from examples.english.english_deepoffense_config import global_args
 
 model = ClassificationModel("bert", "bert-base-multilingual-cased",  use_cuda=torch.cuda.is_available(),
                            args=global_args)
