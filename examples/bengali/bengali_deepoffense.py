@@ -20,15 +20,15 @@ if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
     os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER))
 
-train = pd.read_csv('examples/bengali/data/trac2_iben_train.csv', sep=",",  quoting=csv.QUOTE_NONE)
+train = pd.read_csv('examples/bengali/data/trac2_iben_train.csv', sep=",",  quoting=csv.QUOTE_NONE,  encoding="utf-8-sig")
 train = train.rename(columns={'Text': 'text', 'Sub-task A': 'labels'}).dropna()
 train = train[['text', 'labels']]
 
-dev = pd.read_csv('examples/bengali/data/trac2_iben_dev.csv', sep=",",  quoting=csv.QUOTE_NONE)
+dev = pd.read_csv('examples/bengali/data/trac2_iben_dev.csv', sep=",",  quoting=csv.QUOTE_NONE,  encoding="utf-8-sig")
 dev = dev.rename(columns={'Text': 'text', 'Sub-task A': 'labels'}).dropna()
 dev = dev[['text', 'labels']]
 
-test = pd.read_csv('examples/bengali/data/trac2_iben_test.csv', sep=",",  quoting=csv.QUOTE_NONE)
+test = pd.read_csv('examples/bengali/data/trac2_iben_test.csv', sep=",",  quoting=csv.QUOTE_NONE,  encoding="utf-8-sig")
 test = test.rename(columns={'Text': 'text', 'Sub-task A': 'labels'}).dropna()
 test = test[['text', 'labels']]
 
