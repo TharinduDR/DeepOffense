@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 import time
@@ -15,7 +14,7 @@ from examples.common.evaluation import macro_f1, weighted_f1
 from examples.common.label_converter import decode, encode
 from examples.malayalam.malayalam_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
     MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED
-from examples.malayalam.print_stat import print_information
+from examples.common.print_stat import print_information
 
 if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
