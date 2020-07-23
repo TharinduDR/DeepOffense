@@ -14,7 +14,7 @@ from examples.common.evaluation import macro_f1, weighted_f1
 from examples.common.label_converter import decode, encode
 from examples.bengali.bengali_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
     MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE
-from examples.common.print_stat import print_information
+from examples.common.print_stat import print_information, print_information_multi_class
 
 if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
@@ -97,6 +97,6 @@ test['labels'] = decode(test['labels'])
 
 time.sleep(5)
 
-print_information(test, "predictions", "labels")
+print_information_multi_class(test, "predictions", "labels")
 test.to_csv(os.path.join(TEMP_DIRECTORY, RESULT_FILE),  header=True, sep='\t', index=False, encoding='utf-8')
 
