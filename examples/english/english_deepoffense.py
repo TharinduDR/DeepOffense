@@ -20,8 +20,8 @@ if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
     os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER))
 
-data = pd.read_csv('examples/english/data/olid-training-v1.0.tsv', sep="\t",  quoting=csv.QUOTE_NONE)
-data = data.rename(columns={'tweet': 'text', 'subtask_a': 'labels'}).dropna()
+data = pd.read_csv('examples/english/data/olid-training-v1.0.tsv', sep="\t")
+data = data.rename(columns={'tweet': 'text', 'subtask_a': 'labels'})
 data = data[['text', 'labels']]
 
 train, test = train_test_split(data, test_size=0.2)
