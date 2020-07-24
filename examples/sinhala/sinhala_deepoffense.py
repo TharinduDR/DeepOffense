@@ -20,7 +20,7 @@ if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
     os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER))
 
-data = pd.read_csv('examples/sinhala/data/final-data-set.csv', sep=",")
+data = pd.read_csv('examples/sinhala/data/final-data-set.csv')
 data = data.rename(columns={'class': 'labels'})
 data = data[['text', 'labels']]
 
@@ -61,11 +61,11 @@ if args["evaluate_during_training"]:
         if os.path.exists(args['output_dir']) and os.path.isdir(args['output_dir']):
             shutil.rmtree(args['output_dir'])
         print("Started Fold {}".format(i))
-        model = ClassificationModel(MODEL_TYPE, MODEL_NAME, args=args,
+        model = ClassificationModel(MODEL_TYPE, MODEL_NAME, args=args, num_labels=3,
                                     use_cuda=torch.cuda.is_available())  # You can set class weights by using the optional weight argument
         train_df, eval_df = train_test_split(train, test_size=0.1, random_state=SEED * i)
         model.train_model(train_df, eval_df=eval_df, macro_f1=macro_f1, weighted_f1=weighted_f1, accuracy=sklearn.metrics.accuracy_score)
-        model = ClassificationModel(MODEL_TYPE, args["best_model_dir"], args=args,  num_labels=3,
+        model = ClassificationModel(MODEL_TYPE, args["best_model_dir"], args=args,
                                     use_cuda=torch.cuda.is_available())
 
         predictions, raw_outputs = model.predict(test_sentences)
@@ -78,6 +78,8 @@ if args["evaluate_during_training"]:
         final_predictions.append(int(max(set(row), key=row.count)))
     test['predictions'] = final_predictions
 else:
+    model = ClassificationModel(MODEL_TYPE, MODEL_NAME, args=args, num_labels=3,
+                                use_cuda=torch.cuda.is_available())
     model.train_model(train, macro_f1=macro_f1, weighted_f1=weighted_f1, accuracy=sklearn.metrics.accuracy_score)
     predictions, raw_outputs = model.predict(test_sentences)
     test['predictions'] = predictions
