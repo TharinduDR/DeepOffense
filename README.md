@@ -41,13 +41,13 @@ Following pre-trained models are released. We will be keep releasing new models.
 |               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
 | Hindi         | OFF/NOT   | BERT-m             |                                      | [HASOC 2019](https://hasocfire.github.io/hasoc/2019/index.html)              |          |             |  
 |               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
+|               |           | XLM-R              |  [Model.zip](https://bit.ly/2ZW5py9) |                                                                              |          |             | 
 |               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
 | Malayalam     | OFF/NOT   | BERT-m             |                                      | [HASOC 2020](https://hasocfire.github.io/hasoc/2020/index.html)              |          |             |  
 |               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
+|               |           | XLM-R              |  [Model.zip](https://bit.ly/3eZ5Iga) |                                                                              |          |             | 
 |               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Sinhala       | Neutral/Sexism/Racist | BERT-m             |                          |[GitHub](https://github.com/renuka-fernando/sinhalese_language_racism_detection)|          |             |  
+| Sinhala       | Neutral/Sexism/Racist | BERT-m |                                     |[GitHub](https://github.com/renuka-fernando/sinhalese_language_racism_detection)|          |             |  
 |               |           | BERT-m TL          |                                      |                                                                              |          |             | 
 |               |           | XLM-R              |                                      |                                                                              |          |             | 
 |               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
