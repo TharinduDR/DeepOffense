@@ -12,7 +12,7 @@ from deepoffense.classification import ClassificationModel
 from deepoffense.language_modeling.language_modeling_model import LanguageModelingModel
 from examples.common.evaluation import macro_f1, weighted_f1
 from examples.common.label_converter import decode, encode
-from examples.greek.greek_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
+from examples.turkish.turkish_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
     MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE
 from examples.common.print_stat import print_information
 
@@ -20,7 +20,7 @@ if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
     os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER))
 
-data = pd.read_csv('examples/greek/data/offenseval-greek-training-v1.tsv', sep="\t")
+data = pd.read_csv('examples/turkish/data/offenseval-tr-training-v1.tsv', sep="\t")
 data = data.rename(columns={'tweet': 'text', 'subtask_a': 'labels'})
 data = data[['text', 'labels']]
 
