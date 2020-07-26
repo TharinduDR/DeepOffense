@@ -12,6 +12,8 @@ MODEL_TYPE = "xlmroberta"
 MODEL_NAME = "xlm-roberta-large"
 LANGUAGE_FINETUNE =False
 SEED = 777
+GOOGLE_DRIVE = True
+DRIVE_FILE_ID = "1_P3dCLcN3XoJT8BRgFhrwdVMODgyejwI"
 
 # training instances = 7000 > if batch size=8, batches = 875 > evaluate during training steps -> 80 or 175
 

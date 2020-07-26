@@ -10,15 +10,19 @@ from sklearn.model_selection import train_test_split
 
 from deepoffense.classification import ClassificationModel
 from deepoffense.language_modeling.language_modeling_model import LanguageModelingModel
+from examples.common.download import download_from_google_drive
 from examples.common.evaluation import macro_f1, weighted_f1
 from examples.common.label_converter import decode, encode
 from examples.arabic.arabic_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
-    MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE
+    MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE, GOOGLE_DRIVE, DRIVE_FILE_ID
 from examples.common.print_stat import print_information
 
 if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
     os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER))
+
+if GOOGLE_DRIVE:
+    download_from_google_drive(DRIVE_FILE_ID, MODEL_NAME)
 
 train = pd.read_csv('examples/arabic/data/offenseval-ar-training-v1.tsv', sep="\t")
 train = train.rename(columns={'tweet': 'text', 'subtask_a': 'labels'})
