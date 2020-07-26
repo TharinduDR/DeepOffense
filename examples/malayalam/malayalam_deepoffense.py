@@ -10,15 +10,19 @@ from sklearn.model_selection import train_test_split
 
 from deepoffense.classification import ClassificationModel
 from deepoffense.language_modeling.language_modeling_model import LanguageModelingModel
+from examples.common.download import download_from_google_drive
 from examples.common.evaluation import macro_f1, weighted_f1
 from examples.common.label_converter import decode, encode
 from examples.malayalam.malayalam_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
-    MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE
+    MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE, DRIVE_FILE_ID, GOOGLE_DRIVE
 from examples.common.print_stat import print_information
 
 if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
     os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER))
+
+if GOOGLE_DRIVE:
+    download_from_google_drive(DRIVE_FILE_ID, MODEL_NAME)
 
 train = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-train.csv", sep='\t',
                     header=None, names=["labels", "text"], quoting=csv.QUOTE_NONE)
