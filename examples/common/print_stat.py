@@ -28,12 +28,12 @@ def print_information_multi_class(df, pred_column, real_column):
 
     labels = set(predictions)
 
-    for label in labels:
-        print()
-        print("Stat of the {} Class".format(label))
-        print("Recall {}".format(recall_score(real_values, predictions, labels=labels, pos_label=label, average='weighted')))
-        print("Precision {}".format(precision_score(real_values, predictions, labels=labels, pos_label=label, average='weighted')))
-        print("F1 Score {}".format(f1_score(real_values, predictions, labels=labels, pos_label=label, average='weighted')))
+    # for label in labels:
+    #     print()
+    #     print("Stat of the {} Class".format(label))
+    #     print("Recall {}".format(recall_score(real_values, predictions, labels=labels, pos_label=label, average='weighted')))
+    #     print("Precision {}".format(precision_score(real_values, predictions, labels=labels, pos_label=label, average='weighted')))
+    #     print("F1 Score {}".format(f1_score(real_values, predictions, labels=labels, pos_label=label, average='weighted')))
 
     print()
     print("Weighted Recall {}".format(recall_score(real_values, predictions, average='weighted')))
