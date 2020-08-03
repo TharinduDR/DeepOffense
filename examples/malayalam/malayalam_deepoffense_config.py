@@ -8,11 +8,11 @@ DEV_EVAL_FILE = 'dev_eval.txt'
 RESULT_FILE = "result.csv"
 SUBMISSION_FOLDER = "transformers"
 SUBMISSION_FILE = "transformers"
-MODEL_TYPE = "xlmroberta"
-MODEL_NAME = "deepoffense/en"
+MODEL_TYPE = "bert"
+MODEL_NAME = "bert-base-multilingual-cased"
 LANGUAGE_FINETUNE =False
 SEED = 777
-GOOGLE_DRIVE = True
+GOOGLE_DRIVE = False
 DRIVE_FILE_ID = "15LNjnXQY_VYNk5crqp6JBmD2PmDMOusB"
 
 # training instances = 7000 > if batch size=8, batches = 875 > evaluate during training steps -> 80 or 175
