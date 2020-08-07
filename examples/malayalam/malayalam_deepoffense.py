@@ -14,7 +14,8 @@ from examples.common.download import download_from_google_drive
 from examples.common.evaluation import macro_f1, weighted_f1
 from examples.common.label_converter import decode, encode
 from examples.malayalam.malayalam_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
-    MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE, DRIVE_FILE_ID, GOOGLE_DRIVE
+    MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE, DRIVE_FILE_ID, GOOGLE_DRIVE, \
+    DEV_RESULT_FILE
 from examples.common.print_stat import print_information
 
 if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
@@ -29,11 +30,15 @@ train = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-train.csv", sep=
 dev = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-dev.csv", sep='\t',
                   header=None, names=["labels", "text"], quoting=csv.QUOTE_NONE)
 
+test = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-test.csv", sep=',',
+                  header=None, names=["id", "text"], quoting=csv.QUOTE_NONE)
+
 
 if LANGUAGE_FINETUNE:
     train_list = train['text'].tolist()
     dev_list = dev['text'].tolist()
-    complete_list = train_list + dev_list
+    test_list = test['text'].tolist()
+    complete_list = train_list + dev_list + test_list
     lm_train = complete_list[0: int(len(complete_list)*0.8)]
     lm_test = complete_list[-int(len(complete_list)*0.2):]
 
@@ -59,6 +64,9 @@ dev['labels'] = encode(dev["labels"])
 dev_sentences = dev['text'].tolist()
 dev_preds = np.zeros((len(dev), args["n_fold"]))
 
+test_sentences = test['text'].tolist()
+test_preds = np.zeros((len(test), args["n_fold"]))
+
 if args["evaluate_during_training"]:
     for i in range(args["n_fold"]):
         if os.path.exists(args['output_dir']) and os.path.isdir(args['output_dir']):
@@ -71,25 +79,41 @@ if args["evaluate_during_training"]:
         model = ClassificationModel(MODEL_TYPE, args["best_model_dir"], args=args,
                                     use_cuda=torch.cuda.is_available())
 
-        predictions, raw_outputs = model.predict(dev_sentences)
-        dev_preds[:, i] = predictions
+        dev_predictions, dev_raw_outputs = model.predict(dev_sentences)
+        dev_preds[:, i] = dev_predictions
+
+        test_predictions, test_raw_outputs = model.predict(test_sentences)
+        test_preds[:, i] = test_predictions
         print("Completed Fold {}".format(i))
     # select majority class of each instance (row)
-    final_predictions = []
+    final_dev_predictions = []
     for row in dev_preds:
         row = row.tolist()
-        final_predictions.append(int(max(set(row), key=row.count)))
-    dev['predictions'] = final_predictions
+        final_dev_predictions.append(int(max(set(row), key=row.count)))
+    dev['predictions'] = final_dev_predictions
+
+    final_test_predictions = []
+    for row in test_preds:
+        row = row.tolist()
+        final_test_predictions.append(int(max(set(row), key=row.count)))
+    test['predictions'] = final_test_predictions
+
 else:
     model.train_model(train, macro_f1=macro_f1, weighted_f1=weighted_f1, accuracy=sklearn.metrics.accuracy_score)
-    predictions, raw_outputs = model.predict(dev_sentences)
-    dev['predictions'] = predictions
+    dev_predictions, raw_dev_outputs = model.predict(dev_sentences)
+    dev['predictions'] = dev_predictions
+
+    test_predictions, raw_test_outputs = model.predict(test_sentences)
+    test['predictions'] = dev_predictions
 
 dev['predictions'] = decode(dev['predictions'])
 dev['labels'] = decode(dev['labels'])
 
+test['label'] = decode(test['predictions'])
+
 time.sleep(5)
 
 print_information(dev, "predictions", "labels")
-dev.to_csv(os.path.join(TEMP_DIRECTORY, RESULT_FILE),  header=True, sep='\t', index=False, encoding='utf-8')
+dev.to_csv(os.path.join(TEMP_DIRECTORY, DEV_RESULT_FILE),  header=True, sep='\t', index=False, encoding='utf-8')
+test.to_csv(os.path.join(TEMP_DIRECTORY, RESULT_FILE),  header=True, sep=',', index=False, encoding='utf-8')
 
