@@ -7,6 +7,7 @@ import pandas as pd
 import sklearn
 import torch
 from sklearn.model_selection import train_test_split
+import emoji
 
 from deepoffense.classification import ClassificationModel
 from deepoffense.language_modeling.language_modeling_model import LanguageModelingModel
@@ -15,7 +16,7 @@ from examples.common.evaluation import macro_f1, weighted_f1
 from examples.common.label_converter import decode, encode
 from examples.malayalam.malayalam_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
     MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE, DRIVE_FILE_ID, GOOGLE_DRIVE, \
-    DEV_RESULT_FILE
+    DEV_RESULT_FILE, DEMOJIZE
 from examples.common.print_stat import print_information
 
 if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
@@ -33,6 +34,10 @@ dev = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-dev.csv", sep='\t'
 test = pd.read_csv("examples/malayalam/data/ml-Hasoc-offensive-test.csv", sep=',',
                   header=None, names=["id", "text"], quoting=csv.QUOTE_NONE)
 
+if DEMOJIZE:
+    train['text'] = train['text'].apply(lambda x: emoji.demojize(x))
+    dev['text'] = dev['text'].apply(lambda x: emoji.demojize(x))
+    test['text'] = test['text'].apply(lambda x: emoji.demojize(x))
 
 if LANGUAGE_FINETUNE:
     train_list = train['text'].tolist()
