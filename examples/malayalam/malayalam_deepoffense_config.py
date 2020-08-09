@@ -25,11 +25,11 @@ args = {
 
     'fp16': False,
     'fp16_opt_level': 'O1',
-    'max_seq_length': 152,  # 128
-    'train_batch_size': 4,
+    'max_seq_length': 128,  # 128
+    'train_batch_size': 8,
     'gradient_accumulation_steps': 1,
     'eval_batch_size': 8,
-    'num_train_epochs': 5,
+    'num_train_epochs': 2,
     'weight_decay': 0,
     'learning_rate': 1e-5,
     'adam_epsilon': 1e-8,
@@ -90,11 +90,11 @@ language_modeling_args = {
 
     'fp16': False,
     'fp16_opt_level': 'O1',
-    'max_seq_length': 152,  # 128
-    'train_batch_size': 8,
+    'max_seq_length': 128,  # 128
+    'train_batch_size': 4,
     'gradient_accumulation_steps': 1,
     'eval_batch_size': 8,
-    'num_train_epochs': 2,
+    'num_train_epochs': 4,
     'weight_decay': 0,
     'learning_rate': 1e-5,
     'adam_epsilon': 1e-8,
