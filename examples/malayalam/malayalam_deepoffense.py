@@ -55,7 +55,7 @@ if LANGUAGE_FINETUNE:
         for item in lm_test:
             f.write("%s\n" % item)
 
-    model = LanguageModelingModel("auto", MODEL_NAME, args=language_modeling_args, use_cuda=False)
+    model = LanguageModelingModel("auto", MODEL_NAME, args=language_modeling_args, use_cuda=torch.cuda.is_available())
     model.train_model(os.path.join(TEMP_DIRECTORY, "lm_train.txt"), eval_file=os.path.join(TEMP_DIRECTORY, "lm_test.txt"))
     MODEL_NAME = language_modeling_args["best_model_dir"]
 
