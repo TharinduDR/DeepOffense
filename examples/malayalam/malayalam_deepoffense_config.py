@@ -26,10 +26,10 @@ args = {
     'fp16': False,
     'fp16_opt_level': 'O1',
     'max_seq_length': 152,  # 128
-    'train_batch_size': 8,
+    'train_batch_size': 4,
     'gradient_accumulation_steps': 1,
     'eval_batch_size': 8,
-    'num_train_epochs': 3,
+    'num_train_epochs': 5,
     'weight_decay': 0,
     'learning_rate': 1e-5,
     'adam_epsilon': 1e-8,
