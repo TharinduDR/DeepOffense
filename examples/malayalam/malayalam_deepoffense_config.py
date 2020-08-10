@@ -8,8 +8,8 @@ DEV_EVAL_FILE = 'dev_eval.txt'
 RESULT_FILE = "result.csv"
 SUBMISSION_FOLDER = "transformers"
 SUBMISSION_FILE = "transformers"
-MODEL_TYPE = "xlmroberta"
-MODEL_NAME = "xlm-roberta-base"
+MODEL_TYPE = "bert"
+MODEL_NAME = "bert-base-multilingual-cased"
 LANGUAGE_FINETUNE =True
 SEED = 777
 GOOGLE_DRIVE = False
@@ -25,11 +25,11 @@ args = {
 
     'fp16': False,
     'fp16_opt_level': 'O1',
-    'max_seq_length': 128,  # 128
+    'max_seq_length': 152,  # 128
     'train_batch_size': 8,
     'gradient_accumulation_steps': 1,
     'eval_batch_size': 8,
-    'num_train_epochs': 2,
+    'num_train_epochs': 5,
     'weight_decay': 0,
     'learning_rate': 1e-5,
     'adam_epsilon': 1e-8,
@@ -90,7 +90,7 @@ language_modeling_args = {
 
     'fp16': False,
     'fp16_opt_level': 'O1',
-    'max_seq_length': 128,  # 128
+    'max_seq_length': 152,  # 128
     'train_batch_size': 8,
     'gradient_accumulation_steps': 1,
     'eval_batch_size': 8,
