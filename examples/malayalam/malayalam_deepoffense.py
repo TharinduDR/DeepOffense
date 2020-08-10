@@ -72,7 +72,7 @@ dev_preds = np.zeros((len(dev), args["n_fold"]))
 test_sentences = test['text'].tolist()
 test_preds = np.zeros((len(test), args["n_fold"]))
 
-train = pd.concat([train, dev], axis=1)
+train = pd.concat([train, dev])
 
 if args["evaluate_during_training"]:
     for i in range(args["n_fold"]):
