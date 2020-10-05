@@ -1,6 +1,6 @@
 # DeepOffense : Multilingual Offensive Language Identification with Cross-lingual Embeddings
 
-DeepOffense provides state-of-the-art models for multilingual offensive language identification.
+DeepOffense provides state-of-the-art models for multilingual offensive language identification. In this project, we take advantage of English data available by applying cross-lingual contextual word embeddings and transfer learning to make predictions in low resource languages. We project predictions on comparable data in Bengali, Hindi, and Spanish and we report results of 0.8415 F1 macro for Bengali, 0.8568 F1 macro for Hindi, and 0.7513 F1 macro for Spanish.
 
 ## Installation
 You first need to install PyTorch. THe recommended PyTorch version is 1.5.
@@ -19,51 +19,12 @@ Examples are included in the repository but are not shipped with the library. Pl
 
 
 ## Pretrained Models
-Following pre-trained models are released. We will be keep releasing new models. Please keep in touch. 
+English offensive language detection pre-trained model trained with XLM-R  large model on OffensEval data can be downloaded using this [link](https://drive.google.com/file/d/1_P3dCLcN3XoJT8BRgFhrwdVMODgyejwI/view?usp=sharing).
 
-| Language      | Objective |    Model           |  Model Link                          | Data                                                                         | Macro F1 | Weighted F1 | 
-|:-------------:|-----------| ------------------:|:------------------------------------:|:----------------------------------------------------------------------------:| ------:  | ----------: |  
-| Arabic        | OFF/NOT   | BERT-m             |                                      | [OffenseEval 2020](https://sites.google.com/site/offensevalsharedtask/)      |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Bengali       |NAG/CAG/OAG| BERT-m             |                                      | [TRAC 2](https://sites.google.com/view/trac2/)                               |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Danish        | OFF/NOT   | BERT-m             |                                      | [OffenseEval 2020](https://sites.google.com/site/offensevalsharedtask/)      |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Greek         | OFF/NOT   | BERT-m             |                                      | [OffenseEval 2020](https://sites.google.com/site/offensevalsharedtask/)      |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Hindi         | OFF/NOT   | BERT-m             |                                      | [HASOC 2019](https://hasocfire.github.io/hasoc/2019/index.html)              |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |  [Model.zip](https://bit.ly/2ZW5py9) |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Malayalam     | OFF/NOT   | BERT-m             |                                      | [HASOC 2020](https://hasocfire.github.io/hasoc/2020/index.html)              |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |  [Model.zip](https://bit.ly/3eZ5Iga) |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Sinhala       | Neutral/Sexism/Racist | BERT-m |                                     |[GitHub](https://github.com/renuka-fernando/sinhalese_language_racism_detection)|          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Spanish       | OFF/NOT   | BERT-m             |                                      | [HATEVAL 2020](https://competitions.codalab.org/competitions/19935)          |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-| Turkish       | OFF/NOT   | BERT-m             |                                      | [OffenseEval 2020](https://sites.google.com/site/offensevalsharedtask/)      |          |             |  
-|               |           | BERT-m TL          |                                      |                                                                              |          |             | 
-|               |           | XLM-R              |                                      |                                                                              |          |             | 
-|               |           | XLM-R  TL          |                                      |                                                                              |          |             | 
-
-Once downloading them and unzipping it, they can be loaded easily
+Once downloading it and unzipping it, they can be loaded easily. To see how to begin the training process please refer the [examples](/examples) directory
 
 ```bash
-model = ClassificationModel("xlmroberta", "path,  use_cuda=torch.cuda.is_available())
+model = ClassificationModel("xlmroberta", "path",  use_cuda=torch.cuda.is_available())
 ```
 
 
@@ -72,6 +33,23 @@ model = ClassificationModel("xlmroberta", "path,  use_cuda=torch.cuda.is_availab
 ## Citation
 Please consider citing us if you use the library. 
 ```bash
-Coming soon!
-Please keep in touch
+@inproceedings{ranasinghe-etal-2020-multilingual,
+    title = "Multilingual Offensive Language Identification with Cross-lingual Embeddings",
+    author = "Ranasinghe, Tharindu  and
+      Zampieri, Marcos,
+    booktitle = "Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing",
+    month = nov
+    year = "2020",
+    }
+```
+
+Citation for the Malayalam specific paper, 
+
+```bash
+@inproceedings{ranasinghe-etal-2020-wlv,
+     title={WLV-RIT at HASOC 2020: Offensive Language Identification in Code-switched Texts},
+      author={Ranasinghe, Tharindu and Zampieri, Marcos},
+      year={2020},
+      booktitle={Proceedings of FIRE}
+}
 ```
