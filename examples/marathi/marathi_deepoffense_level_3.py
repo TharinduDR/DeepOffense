@@ -27,12 +27,14 @@ if GOOGLE_DRIVE:
     download_from_google_drive(DRIVE_FILE_ID, MODEL_NAME)
 
 train = pd.read_csv('examples/marathi/data/MOLD_Training.tsv', sep="\t",  encoding="utf-8")
-train = train.rename(columns={'subtask_c': 'labels', 'tweet': 'text'}).dropna()
+train = train.rename(columns={'subtask_c': 'labels', 'tweet': 'text'})
 train = train[['text', 'labels']]
+train = train.dropna()
 
 dev = pd.read_csv('examples/marathi/data/MOLD_Testing.tsv', sep="\t",  encoding="utf-8")
-dev = dev.rename(columns={'subtask_c': 'labels', 'tweet': 'text'}).dropna()
+dev = dev.rename(columns={'subtask_c': 'labels', 'tweet': 'text'})
 dev = dev[['text', 'labels']]
+dev = dev.dropna()
 
 if DEMOJIZE:
     train['text'] = train['text'].apply(lambda x: emoji.demojize(x))
