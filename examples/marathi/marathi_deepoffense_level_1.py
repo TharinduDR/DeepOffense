@@ -27,11 +27,11 @@ if GOOGLE_DRIVE:
     download_from_google_drive(DRIVE_FILE_ID, MODEL_NAME)
 
 train = pd.read_csv('examples/marathi/data/MOLD_Training.tsv', sep="\t",  encoding="utf-8")
-train = train.rename(columns={'subtask_a': 'labels', 'tweet': 'text'}).dropna()
+train = train.rename(columns={'subtask_a': 'labels', 'tweet': 'text'})
 train = train[['text', 'labels']]
 
 dev = pd.read_csv('examples/marathi/data/MOLD_Testing.tsv', sep="\t",  encoding="utf-8")
-dev = dev.rename(columns={'subtask_a': 'labels', 'tweet': 'text'}).dropna()
+dev = dev.rename(columns={'subtask_a': 'labels', 'tweet': 'text'})
 dev = dev[['text', 'labels']]
 
 if DEMOJIZE:
