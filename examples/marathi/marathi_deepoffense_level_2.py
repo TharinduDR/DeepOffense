@@ -37,6 +37,8 @@ dev = dev.rename(columns={'subtask_b': 'labels', 'tweet': 'text'})
 dev = dev[['text', 'labels']]
 dev = dev.dropna()
 
+train = train.sample(frac=1)
+
 if DEMOJIZE:
     train['text'] = train['text'].apply(lambda x: emoji.demojize(x))
     dev['text'] = dev['text'].apply(lambda x: emoji.demojize(x))

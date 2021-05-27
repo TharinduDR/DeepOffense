@@ -36,6 +36,8 @@ dev = dev.rename(columns={'subtask_c': 'labels', 'tweet': 'text'})
 dev = dev[['text', 'labels']]
 dev = dev.dropna()
 
+train = train.sample(frac=1)
+
 if DEMOJIZE:
     train['text'] = train['text'].apply(lambda x: emoji.demojize(x))
     dev['text'] = dev['text'].apply(lambda x: emoji.demojize(x))
@@ -75,7 +77,7 @@ if args["evaluate_during_training"]:
         if os.path.exists(args['output_dir']) and os.path.isdir(args['output_dir']):
             shutil.rmtree(args['output_dir'])
         print("Started Fold {}".format(i))
-        model = ClassificationModel(MODEL_TYPE, MODEL_NAME, args=args,
+        model = ClassificationModel(MODEL_TYPE, MODEL_NAME, num_labels=3, args=args,
                                     use_cuda=torch.cuda.is_available())  # You can set class weights by using the optional weight argument
         train_df, eval_df = train_test_split(train, test_size=0.1, random_state=SEED * i)
         model.train_model(train_df, eval_df=eval_df, macro_f1=macro_f1, weighted_f1=weighted_f1, accuracy=sklearn.metrics.accuracy_score)
@@ -97,7 +99,7 @@ if args["evaluate_during_training"]:
 
 
 else:
-    model = ClassificationModel(MODEL_TYPE, MODEL_NAME, args=args,
+    model = ClassificationModel(MODEL_TYPE, MODEL_NAME, args=args, num_labels=3,
                                 use_cuda=torch.cuda.is_available())
     model.train_model(train, macro_f1=macro_f1, weighted_f1=weighted_f1, accuracy=sklearn.metrics.accuracy_score)
     dev_predictions, raw_dev_outputs = model.predict(dev_sentences)
