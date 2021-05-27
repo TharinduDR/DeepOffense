@@ -36,11 +36,20 @@ dev = dev.rename(columns={'subtask_c': 'labels', 'tweet': 'text'})
 dev = dev[['text', 'labels']]
 dev = dev.dropna()
 
+
 train = train.sample(frac=1)
 
 if DEMOJIZE:
     train['text'] = train['text'].apply(lambda x: emoji.demojize(x))
     dev['text'] = dev['text'].apply(lambda x: emoji.demojize(x))
+
+train_class_ind = train[train['labels'] == "IND"]
+train_class_grp = train[train['labels'] == "GRP"]
+train_class_oth = train[train['labels'] == "OTH"]
+
+df_class_ind_under = train_class_ind.sample(train_class_oth['labels'].count())
+df_class_grp_under = train_class_grp.sample(train_class_oth['labels'].count())
+train = pd.concat([df_class_ind_under, df_class_grp_under, train_class_oth ], axis=0)
 
 # if LANGUAGE_FINETUNE:
 #     train_list = train['text'].tolist()
