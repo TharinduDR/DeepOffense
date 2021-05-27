@@ -43,6 +43,12 @@ if DEMOJIZE:
     train['text'] = train['text'].apply(lambda x: emoji.demojize(x))
     dev['text'] = dev['text'].apply(lambda x: emoji.demojize(x))
 
+train_class_tin = train[train['labels'] == "TIN"]
+train_class_unt = train[train['labels'] == "UNT"]
+
+df_class_tin_under = train_class_tin.sample(train_class_unt['labels'].count())
+train = pd.concat([train_class_unt, df_class_tin_under], axis=0)
+
 # if LANGUAGE_FINETUNE:
 #     train_list = train['text'].tolist()
 #     dev_list = dev['text'].tolist()
