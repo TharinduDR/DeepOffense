@@ -5,67 +5,60 @@
 from __future__ import absolute_import, division, print_function
 
 import glob
-import json
 import logging
 import math
 import os
 import random
 import shutil
+import tempfile
 import warnings
-from multiprocessing import cpu_count
 from dataclasses import asdict
+from pathlib import Path
 
 import numpy as np
-from scipy.stats import mode, pearsonr
+import pandas as pd
+import torch
+from scipy.stats import mode
 from sklearn.metrics import (
     confusion_matrix,
     label_ranking_average_precision_score,
     matthews_corrcoef,
-    mean_squared_error,
 )
-from tqdm.auto import tqdm, trange
-from tqdm.contrib import tenumerate
-
-import pandas as pd
-import torch
-
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
-from torch.utils.data.distributed import DistributedSampler
+from tqdm.auto import tqdm, trange
 from transformers import (
-    WEIGHTS_NAME,
-    AdamW,
-    AlbertConfig,
-    AlbertTokenizer,
     BertConfig,
     BertTokenizer,
-    CamembertConfig,
-    CamembertTokenizer,
     DistilBertConfig,
     DistilBertTokenizer,
-    ElectraConfig,
-    ElectraTokenizer,
-    FlaubertConfig,
-    FlaubertTokenizer,
     LongformerConfig,
     LongformerForSequenceClassification,
     LongformerTokenizer,
-    MobileBertConfig,
-    MobileBertTokenizer,
-    MobileBertForSequenceClassification,
     RobertaConfig,
     RobertaTokenizer,
     XLMConfig,
     XLMRobertaConfig,
     XLMRobertaTokenizer,
-    XLMTokenizer,
-    XLNetConfig,
-    XLNetTokenizer,
+    XLMTokenizer, AlbertConfig, AlbertTokenizer, AutoConfig, AutoModelForSequenceClassification, AutoTokenizer,
+    BertTokenizerFast, BertweetTokenizer, CamembertConfig, CamembertTokenizerFast, DebertaConfig,
+    DebertaForSequenceClassification, DebertaTokenizer, DistilBertTokenizerFast, ElectraConfig, ElectraTokenizerFast,
+    FlaubertConfig, FlaubertTokenizer, LayoutLMConfig, LongformerTokenizerFast, RobertaTokenizerFast,
+    XLMRobertaTokenizerFast, XLNetConfig, XLNetTokenizerFast,
+)
+from transformers.convert_graph_to_onnx import convert, quantize
+from transformers.optimization import AdamW, Adafactor
+from transformers.optimization import (
+    get_constant_schedule,
+    get_constant_schedule_with_warmup,
     get_linear_schedule_with_warmup,
+    get_cosine_schedule_with_warmup,
+    get_cosine_with_hard_restarts_schedule_with_warmup,
+    get_polynomial_decay_schedule_with_warmup,
 )
 
 from deepoffense.classification.classification_utils import LazyClassificationDataset, InputExample, \
-    convert_examples_to_features
+    convert_examples_to_features, sweep_config_to_sweep_values
 from deepoffense.classification.transformer_models.albert_model import AlbertForSequenceClassification
 from deepoffense.classification.transformer_models.args.model_args import ClassificationArgs
 from deepoffense.classification.transformer_models.bert_model import BertForSequenceClassification
@@ -90,11 +83,20 @@ logger = logging.getLogger(__name__)
 
 class ClassificationModel:
     def __init__(
-        self, model_type, model_name, num_labels=None, weight=None, args=None, use_cuda=True, cuda_device=-1, **kwargs,
+            self,
+            model_type,
+            model_name,
+            num_labels=None,
+            weight=None,
+            args=None,
+            use_cuda=True,
+            cuda_device=-1,
+            onnx_execution_provider=None,
+            **kwargs,
     ):
 
         """
-        Initializes a ClassificationModel model.
+        Initializes a MonoTransQuest model.
 
         Args:
             model_type: The type of model (bert, xlnet, xlm, roberta, distilbert)
@@ -104,22 +106,66 @@ class ClassificationModel:
             args (optional): Default args will be used if this parameter is not provided. If provided, it should be a dict containing the args that should be changed in the default args.
             use_cuda (optional): Use GPU if available. Setting to False will force model to use CPU only.
             cuda_device (optional): Specific GPU that should be used. Will use the first available GPU by default.
+            onnx_execution_provider (optional): ExecutionProvider to use with ONNX Runtime. Will use CUDA (if use_cuda) or CPU (if use_cuda is False) by default.
             **kwargs (optional): For providing proxies, force_download, resume_download, cache_dir and other options specific to the 'from_pretrained' implementation where this will be supplied.
         """  # noqa: ignore flake8"
 
         MODEL_CLASSES = {
             "albert": (AlbertConfig, AlbertForSequenceClassification, AlbertTokenizer),
-            "bert": (BertConfig, BertForSequenceClassification, BertTokenizer),
-            "camembert": (CamembertConfig, CamembertForSequenceClassification, CamembertTokenizer),
-            "distilbert": (DistilBertConfig, DistilBertForSequenceClassification, DistilBertTokenizer),
-            "electra": (ElectraConfig, ElectraForSequenceClassification, ElectraTokenizer),
-            "flaubert": (FlaubertConfig, FlaubertForSequenceClassification, FlaubertTokenizer),
-            "longformer": (LongformerConfig, LongformerForSequenceClassification, LongformerTokenizer),
-            "mobilebert": (MobileBertConfig, MobileBertForSequenceClassification, MobileBertTokenizer),
-            "roberta": (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer),
-            "xlnet": (XLNetConfig, XLNetForSequenceClassification, XLNetTokenizer),
+            "auto": (AutoConfig, AutoModelForSequenceClassification, AutoTokenizer),
+            "bert": (BertConfig, BertForSequenceClassification, BertTokenizerFast),
+            "bertweet": (
+                RobertaConfig,
+                RobertaForSequenceClassification,
+                BertweetTokenizer,
+            ),
+
+            "camembert": (
+                CamembertConfig,
+                CamembertForSequenceClassification,
+                CamembertTokenizerFast,
+            ),
+            "deberta": (
+                DebertaConfig,
+                DebertaForSequenceClassification,
+                DebertaTokenizer,
+            ),
+            "distilbert": (
+                DistilBertConfig,
+                DistilBertForSequenceClassification,
+                DistilBertTokenizerFast,
+            ),
+            "electra": (
+                ElectraConfig,
+                ElectraForSequenceClassification,
+                ElectraTokenizerFast,
+            ),
+            "flaubert": (
+                FlaubertConfig,
+                FlaubertForSequenceClassification,
+                FlaubertTokenizer,
+            ),
+
+            "longformer": (
+                LongformerConfig,
+                LongformerForSequenceClassification,
+                LongformerTokenizerFast,
+            ),
+
+            "roberta": (
+                RobertaConfig,
+                RobertaForSequenceClassification,
+                RobertaTokenizerFast,
+            ),
+
+
             "xlm": (XLMConfig, XLMForSequenceClassification, XLMTokenizer),
-            "xlmroberta": (XLMRobertaConfig, XLMRobertaForSequenceClassification, XLMRobertaTokenizer),
+            "xlmroberta": (
+                XLMRobertaConfig,
+                XLMRobertaForSequenceClassification,
+                XLMRobertaTokenizerFast,
+            ),
+            "xlnet": (XLNetConfig, XLNetForSequenceClassification, XLNetTokenizerFast),
         }
 
         self.args = self._load_model_args(model_name)
@@ -129,10 +175,16 @@ class ClassificationModel:
         elif isinstance(args, ClassificationArgs):
             self.args = args
 
+        if self.args.thread_count:
+            torch.set_num_threads(self.args.thread_count)
+
         if "sweep_config" in kwargs:
+            self.is_sweeping = True
             sweep_config = kwargs.pop("sweep_config")
-            sweep_values = {key: value["value"] for key, value in sweep_config.as_dict().items() if key != "_wandb"}
+            sweep_values = sweep_config_to_sweep_values(sweep_config)
             self.args.update_from_dict(sweep_values)
+        else:
+            self.is_sweeping = False
 
         if self.args.manual_seed:
             random.seed(self.args.manual_seed)
@@ -145,7 +197,11 @@ class ClassificationModel:
             if num_labels:
                 assert num_labels == len(self.args.labels_list)
             if self.args.labels_map:
-                assert list(self.args.labels_map.keys()) == self.args.labels_list
+                try:
+                    assert list(self.args.labels_map.keys()) == self.args.labels_list
+                except AssertionError:
+                    assert [int(key) for key in list(self.args.labels_map.keys())] == self.args.labels_list
+                    self.args.labels_map = {int(key): value for key, value in self.args.labels_map.items()}
             else:
                 self.args.labels_map = {label: i for i, label in enumerate(self.args.labels_list)}
         else:
@@ -175,19 +231,75 @@ class ClassificationModel:
         else:
             self.device = "cpu"
 
-        if self.weight:
-            self.model = model_class.from_pretrained(
-                model_name, config=self.config, weight=torch.Tensor(self.weight).to(self.device), **kwargs,
-            )
+        if self.args.onnx:
+            from onnxruntime import InferenceSession, SessionOptions
+
+            if not onnx_execution_provider:
+                onnx_execution_provider = "CUDAExecutionProvider" if use_cuda else "CPUExecutionProvider"
+
+            options = SessionOptions()
+            options.intra_op_num_threads = 1
+
+            if self.args.dynamic_quantize:
+                model_path = quantize(Path(os.path.join(model_name, "onnx_model.onnx")))
+                self.model = InferenceSession(model_path.as_posix(), options, providers=[onnx_execution_provider])
+            else:
+                model_path = os.path.join(model_name, "onnx_model.onnx")
+                self.model = InferenceSession(model_path, options, providers=[onnx_execution_provider])
         else:
-            self.model = model_class.from_pretrained(model_name, config=self.config, **kwargs)
+            if not self.args.quantized_model:
+                if self.weight:
+                    self.model = model_class.from_pretrained(
+                        model_name, config=self.config, weight=torch.Tensor(self.weight).to(self.device), **kwargs,
+                    )
+                else:
+                    self.model = model_class.from_pretrained(model_name, config=self.config, **kwargs)
+            else:
+                quantized_weights = torch.load(os.path.join(model_name, "pytorch_model.bin"))
+                if self.weight:
+                    self.model = model_class.from_pretrained(
+                        None,
+                        config=self.config,
+                        state_dict=quantized_weights,
+                        weight=torch.Tensor(self.weight).to(self.device),
+                    )
+                else:
+                    self.model = model_class.from_pretrained(None, config=self.config, state_dict=quantized_weights)
+
+            if self.args.dynamic_quantize:
+                self.model = torch.quantization.quantize_dynamic(self.model, {torch.nn.Linear}, dtype=torch.qint8)
+            if self.args.quantized_model:
+                self.model.load_state_dict(quantized_weights)
+            if self.args.dynamic_quantize:
+                self.args.quantized_model = True
 
         self.results = {}
 
         if not use_cuda:
             self.args.fp16 = False
 
-        self.tokenizer = tokenizer_class.from_pretrained(model_name, do_lower_case=self.args.do_lower_case, **kwargs)
+        if self.args.fp16:
+            try:
+                from torch.cuda import amp
+            except AttributeError:
+                raise AttributeError("fp16 requires Pytorch >= 1.6. Please update Pytorch or turn off fp16.")
+
+        if model_name in [
+            "vinai/bertweet-base",
+            "vinai/bertweet-covid19-base-cased",
+            "vinai/bertweet-covid19-base-uncased",
+        ]:
+            self.tokenizer = tokenizer_class.from_pretrained(
+                model_name, do_lower_case=self.args.do_lower_case, normalization=True, **kwargs
+            )
+        else:
+            self.tokenizer = tokenizer_class.from_pretrained(
+                model_name, do_lower_case=self.args.do_lower_case, **kwargs
+            )
+
+        if self.args.special_tokens_list:
+            self.tokenizer.add_tokens(self.args.special_tokens_list, special_tokens=True)
+            self.model.resize_token_embeddings(len(self.tokenizer))
 
         self.args.model_name = model_name
         self.args.model_type = model_type
@@ -204,15 +316,15 @@ class ClassificationModel:
             self.args.wandb_project = None
 
     def train_model(
-        self,
-        train_df,
-        multi_label=False,
-        output_dir=None,
-        show_running_loss=True,
-        args=None,
-        eval_df=None,
-        verbose=True,
-        **kwargs,
+            self,
+            train_df,
+            multi_label=False,
+            output_dir=None,
+            show_running_loss=True,
+            args=None,
+            eval_df=None,
+            verbose=True,
+            **kwargs,
     ):
         """
         Trains the model using 'train_df'
@@ -228,7 +340,8 @@ class ClassificationModel:
                         A metric function should take in two parameters. The first parameter will be the true labels, and the second parameter will be the predictions.
 
         Returns:
-            None
+            global_step: Number of global steps trained
+            training_details: Average training loss if evaluate_during_training is False or full training progress scores if evaluate_during_training is True
         """  # noqa: ignore flake8"
 
         if args:
@@ -249,30 +362,49 @@ class ClassificationModel:
         if os.path.exists(output_dir) and os.listdir(output_dir) and not self.args.overwrite_output_dir:
             raise ValueError(
                 "Output directory ({}) already exists and is not empty."
-                " Use --overwrite_output_dir to overcome.".format(output_dir)
+                " Set overwrite_output_dir: True to automatically overwrite.".format(output_dir)
             )
-
         self._move_model_to_device()
 
         if isinstance(train_df, str) and self.args.lazy_loading:
             if self.args.sliding_window:
                 raise ValueError("Lazy loading cannot be used with sliding window.")
+            if self.args.model_type == "layoutlm":
+                raise NotImplementedError("Lazy loading is not implemented for LayoutLM models")
             train_dataset = LazyClassificationDataset(train_df, self.tokenizer, self.args)
         else:
             if self.args.lazy_loading:
                 raise ValueError("Input must be given as a path to a file when using lazy loading")
             if "text" in train_df.columns and "labels" in train_df.columns:
-                train_examples = [
-                    InputExample(i, text, None, label)
-                    for i, (text, label) in enumerate(zip(train_df["text"].astype(str), train_df["labels"]))
-                ]
+                if self.args.model_type == "layoutlm":
+                    train_examples = [
+                        InputExample(i, text, None, label, x0, y0, x1, y1)
+                        for i, (text, label, x0, y0, x1, y1) in enumerate(
+                            zip(
+                                train_df["text"].astype(str),
+                                train_df["labels"],
+                                train_df["x0"],
+                                train_df["y0"],
+                                train_df["x1"],
+                                train_df["y1"],
+                            )
+                        )
+                    ]
+                else:
+                    train_examples = [
+                        InputExample(i, text, None, label)
+                        for i, (text, label) in enumerate(zip(train_df["text"].astype(str), train_df["labels"]))
+                    ]
             elif "text_a" in train_df.columns and "text_b" in train_df.columns:
-                train_examples = [
-                    InputExample(i, text_a, text_b, label)
-                    for i, (text_a, text_b, label) in enumerate(
-                        zip(train_df["text_a"].astype(str), train_df["text_b"].astype(str), train_df["labels"])
-                    )
-                ]
+                if self.args.model_type == "layoutlm":
+                    raise ValueError("LayoutLM cannot be used with sentence-pair tasks")
+                else:
+                    train_examples = [
+                        InputExample(i, text_a, text_b, label)
+                        for i, (text_a, text_b, label) in enumerate(
+                            zip(train_df["text_a"].astype(str), train_df["text_b"].astype(str), train_df["labels"])
+                        )
+                    ]
             else:
                 warnings.warn(
                     "Dataframe headers not specified. Falling back to using column 0 as text and column 1 as labels."
@@ -284,12 +416,15 @@ class ClassificationModel:
             train_dataset = self.load_and_cache_examples(train_examples, verbose=verbose)
         train_sampler = RandomSampler(train_dataset)
         train_dataloader = DataLoader(
-            train_dataset, sampler=train_sampler, batch_size=self.args.train_batch_size, num_workers=14
+            train_dataset,
+            sampler=train_sampler,
+            batch_size=self.args.train_batch_size,
+            num_workers=self.args.dataloader_num_workers,
         )
 
         os.makedirs(output_dir, exist_ok=True)
 
-        global_step, tr_loss = self.train(
+        global_step, training_details = self.train(
             train_dataloader,
             output_dir,
             multi_label=multi_label,
@@ -303,20 +438,22 @@ class ClassificationModel:
         # model_to_save.save_pretrained(output_dir)
         # self.tokenizer.save_pretrained(output_dir)
         # torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
-        self._save_model(model=self.model)
+        self.save_model(model=self.model)
 
         if verbose:
             logger.info(" Training of {} model complete. Saved to {}.".format(self.args.model_type, output_dir))
 
+        return global_step, training_details
+
     def train(
-        self,
-        train_dataloader,
-        output_dir,
-        multi_label=False,
-        show_running_loss=True,
-        eval_df=None,
-        verbose=True,
-        **kwargs,
+            self,
+            train_dataloader,
+            output_dir,
+            multi_label=False,
+            show_running_loss=True,
+            eval_df=None,
+            verbose=True,
+            **kwargs,
     ):
         """
         Trains the model on train_dataset.
@@ -388,23 +525,73 @@ class ClassificationModel:
         warmup_steps = math.ceil(t_total * args.warmup_ratio)
         args.warmup_steps = warmup_steps if args.warmup_steps == 0 else args.warmup_steps
 
-        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-        scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-        )
+        if args.optimizer == "AdamW":
+            optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+        elif args.optimizer == "Adafactor":
+            optimizer = Adafactor(
+                optimizer_grouped_parameters,
+                lr=args.learning_rate,
+                eps=args.adafactor_eps,
+                clip_threshold=args.adafactor_clip_threshold,
+                decay_rate=args.adafactor_decay_rate,
+                beta1=args.adafactor_beta1,
+                weight_decay=args.weight_decay,
+                scale_parameter=args.adafactor_scale_parameter,
+                relative_step=args.adafactor_relative_step,
+                warmup_init=args.adafactor_warmup_init,
+            )
+            print("Using Adafactor for T5")
+        else:
+            raise ValueError(
+                "{} is not a valid optimizer class. Please use one of ('AdamW', 'Adafactor') instead.".format(
+                    args.optimizer
+                )
+            )
 
-        if args.fp16:
-            try:
-                from apex import amp
-            except ImportError:
-                raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
+        if args.scheduler == "constant_schedule":
+            scheduler = get_constant_schedule(optimizer)
 
-            model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+        elif args.scheduler == "constant_schedule_with_warmup":
+            scheduler = get_constant_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps)
+
+        elif args.scheduler == "linear_schedule_with_warmup":
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+            )
+
+        elif args.scheduler == "cosine_schedule_with_warmup":
+            scheduler = get_cosine_schedule_with_warmup(
+                optimizer,
+                num_warmup_steps=args.warmup_steps,
+                num_training_steps=t_total,
+                num_cycles=args.cosine_schedule_num_cycles,
+            )
+
+        elif args.scheduler == "cosine_with_hard_restarts_schedule_with_warmup":
+            scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+                optimizer,
+                num_warmup_steps=args.warmup_steps,
+                num_training_steps=t_total,
+                num_cycles=args.cosine_schedule_num_cycles,
+            )
+
+        elif args.scheduler == "polynomial_decay_schedule_with_warmup":
+            scheduler = get_polynomial_decay_schedule_with_warmup(
+                optimizer,
+                num_warmup_steps=args.warmup_steps,
+                num_training_steps=t_total,
+                lr_end=args.polynomial_decay_schedule_lr_end,
+                power=args.polynomial_decay_schedule_lr_end,
+            )
+
+        else:
+            raise ValueError("{} is not a valid scheduler.".format(args.scheduler))
 
         if args.n_gpu > 1:
             model = torch.nn.DataParallel(model)
 
         global_step = 0
+        training_progress_scores = None
         tr_loss, logging_loss = 0.0, 0.0
         model.zero_grad()
         train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.silent, mininterval=0)
@@ -426,7 +613,7 @@ class ClassificationModel:
                 global_step = int(checkpoint_suffix)
                 epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
                 steps_trained_in_current_epoch = global_step % (
-                    len(train_dataloader) // args.gradient_accumulation_steps
+                        len(train_dataloader) // args.gradient_accumulation_steps
                 )
 
                 logger.info("   Continuing training from checkpoint, will skip to saved global_step")
@@ -440,11 +627,18 @@ class ClassificationModel:
             training_progress_scores = self._create_training_progress_scores(multi_label, **kwargs)
 
         if args.wandb_project:
-            wandb.init(project=args.wandb_project, config={**asdict(args)}, **args.wandb_kwargs)
+            if not wandb.setup().settings.sweep_id:
+                logger.info(" Initializing WandB run for training.")
+                wandb.init(project=args.wandb_project, config={**asdict(args)}, **args.wandb_kwargs)
             wandb.watch(self.model)
 
-        model.train()
+        if self.args.fp16:
+            from torch.cuda import amp
+
+            scaler = amp.GradScaler()
+
         for _ in train_iterator:
+            model.train()
             if epochs_trained > 0:
                 epochs_trained -= 1
                 continue
@@ -461,9 +655,15 @@ class ClassificationModel:
                     continue
 
                 inputs = self._get_inputs_dict(batch)
-                outputs = model(**inputs)
-                # model outputs are always tuple in pytorch-transformers (see doc)
-                loss = outputs[0]
+                if self.args.fp16:
+                    with amp.autocast():
+                        outputs = model(**inputs)
+                        # model outputs are always tuple in pytorch-transformers (see doc)
+                        loss = outputs[0]
+                else:
+                    outputs = model(**inputs)
+                    # model outputs are always tuple in pytorch-transformers (see doc)
+                    loss = outputs[0]
 
                 if args.n_gpu > 1:
                     loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -478,59 +678,54 @@ class ClassificationModel:
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
 
-                if args.fp16:
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                    # torch.nn.utils.clip_grad_norm_(
-                    #     amp.master_params(optimizer), args.max_grad_norm
-                    # )
+                if self.args.fp16:
+                    scaler.scale(loss).backward()
                 else:
                     loss.backward()
-                    # torch.nn.utils.clip_grad_norm_(
-                    #     model.parameters(), args.max_grad_norm
-                    # )
 
                 tr_loss += loss.item()
                 if (step + 1) % args.gradient_accumulation_steps == 0:
-                    if args.fp16:
-                        torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
-                    else:
+                    if self.args.fp16:
+                        scaler.unscale_(optimizer)
+                    if args.optimizer == "AdamW":
                         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
-                    optimizer.step()
+                    if self.args.fp16:
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        optimizer.step()
                     scheduler.step()  # Update learning rate schedule
                     model.zero_grad()
                     global_step += 1
 
                     if args.logging_steps > 0 and global_step % args.logging_steps == 0:
                         # Log metrics
-                        tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
+                        tb_writer.add_scalar("lr", scheduler.get_last_lr()[0], global_step)
                         tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                         logging_loss = tr_loss
-                        if args.wandb_project:
+                        if args.wandb_project or self.is_sweeping:
                             wandb.log(
                                 {
                                     "Training loss": current_loss,
-                                    "lr": scheduler.get_lr()[0],
+                                    "lr": scheduler.get_last_lr()[0],
                                     "global_step": global_step,
                                 }
                             )
 
                     if args.save_steps > 0 and global_step % args.save_steps == 0:
-
+                        # Save model checkpoint
                         if args.save_recent_only:
                             del_paths = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
                             for del_path in del_paths:
                                 shutil.rmtree(del_path)
-
-                        # Save model checkpoint
                         output_dir_current = os.path.join(output_dir, "checkpoint-{}".format(global_step))
 
-                        self._save_model(output_dir_current, optimizer, scheduler, model=model)
+                        self.save_model(output_dir_current, optimizer, scheduler, model=model)
 
                     if args.evaluate_during_training and (
-                        args.evaluate_during_training_steps > 0
-                        and global_step % args.evaluate_during_training_steps == 0
+                            args.evaluate_during_training_steps > 0
+                            and global_step % args.evaluate_during_training_steps == 0
                     ):
                         # Only evaluate when single GPU otherwise metrics may not average well
                         results, _, _ = self.eval_model(
@@ -543,15 +738,14 @@ class ClassificationModel:
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
 
-                        if args.save_recent_only:
-                            del_paths = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
-                            for del_path in del_paths:
-                                shutil.rmtree(del_path)
-
                         output_dir_current = os.path.join(output_dir, "checkpoint-{}".format(global_step))
 
                         if args.save_eval_checkpoints:
-                            self._save_model(output_dir_current, optimizer, scheduler, model=model, results=results)
+                            if args.save_recent_only:
+                                del_paths = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
+                                for del_path in del_paths:
+                                    shutil.rmtree(del_path)
+                            self.save_model(output_dir_current, optimizer, scheduler, model=model, results=results)
 
                         training_progress_scores["global_step"].append(global_step)
                         training_progress_scores["train_loss"].append(current_loss)
@@ -562,16 +756,16 @@ class ClassificationModel:
                             os.path.join(args.output_dir, "training_progress_scores.csv"), index=False,
                         )
 
-                        if args.wandb_project:
+                        if args.wandb_project or self.is_sweeping:
                             wandb.log(self._get_last_metrics(training_progress_scores))
 
                         if not best_eval_metric:
                             best_eval_metric = results[args.early_stopping_metric]
-                            self._save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
+                            self.save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
                         if best_eval_metric and args.early_stopping_metric_minimize:
                             if best_eval_metric - results[args.early_stopping_metric] > args.early_stopping_delta:
                                 best_eval_metric = results[args.early_stopping_metric]
-                                self._save_model(
+                                self.save_model(
                                     args.best_model_dir, optimizer, scheduler, model=model, results=results
                                 )
                                 early_stopping_counter = 0
@@ -588,11 +782,16 @@ class ClassificationModel:
                                             logger.info(f" Patience of {args.early_stopping_patience} steps reached")
                                             logger.info(" Training terminated.")
                                             train_iterator.close()
-                                        return global_step, tr_loss / global_step
+                                        return (
+                                            global_step,
+                                            tr_loss / global_step
+                                            if not self.args.evaluate_during_training
+                                            else training_progress_scores,
+                                        )
                         else:
                             if results[args.early_stopping_metric] - best_eval_metric > args.early_stopping_delta:
                                 best_eval_metric = results[args.early_stopping_metric]
-                                self._save_model(
+                                self.save_model(
                                     args.best_model_dir, optimizer, scheduler, model=model, results=results
                                 )
                                 early_stopping_counter = 0
@@ -609,24 +808,27 @@ class ClassificationModel:
                                             logger.info(f" Patience of {args.early_stopping_patience} steps reached")
                                             logger.info(" Training terminated.")
                                             train_iterator.close()
-                                        return global_step, tr_loss / global_step
+                                        return (
+                                            global_step,
+                                            tr_loss / global_step
+                                            if not self.args.evaluate_during_training
+                                            else training_progress_scores,
+                                        )
 
             epoch_number += 1
-
-            if args.save_recent_only:
-                del_paths = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
-                for del_path in del_paths:
-                    shutil.rmtree(del_path)
-
             output_dir_current = os.path.join(output_dir, "checkpoint-{}-epoch-{}".format(global_step, epoch_number))
 
             if args.save_model_every_epoch or args.evaluate_during_training:
+                if args.save_recent_only:
+                    del_paths = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
+                    for del_path in del_paths:
+                        shutil.rmtree(del_path)
                 os.makedirs(output_dir_current, exist_ok=True)
 
             if args.save_model_every_epoch:
-                self._save_model(output_dir_current, optimizer, scheduler, model=model)
+                self.save_model(output_dir_current, optimizer, scheduler, model=model)
 
-            if args.evaluate_during_training:
+            if args.evaluate_during_training and args.evaluate_each_epoch:
                 results, _, _ = self.eval_model(
                     eval_df,
                     verbose=verbose and args.evaluate_during_training_verbose,
@@ -635,7 +837,7 @@ class ClassificationModel:
                     **kwargs,
                 )
 
-                self._save_model(output_dir_current, optimizer, scheduler, results=results)
+                self.save_model(output_dir_current, optimizer, scheduler, results=results)
 
                 training_progress_scores["global_step"].append(global_step)
                 training_progress_scores["train_loss"].append(current_loss)
@@ -644,16 +846,16 @@ class ClassificationModel:
                 report = pd.DataFrame(training_progress_scores)
                 report.to_csv(os.path.join(args.output_dir, "training_progress_scores.csv"), index=False)
 
-                if args.wandb_project:
+                if args.wandb_project or self.is_sweeping:
                     wandb.log(self._get_last_metrics(training_progress_scores))
 
                 if not best_eval_metric:
                     best_eval_metric = results[args.early_stopping_metric]
-                    self._save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
+                    self.save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
                 if best_eval_metric and args.early_stopping_metric_minimize:
                     if best_eval_metric - results[args.early_stopping_metric] > args.early_stopping_delta:
                         best_eval_metric = results[args.early_stopping_metric]
-                        self._save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
+                        self.save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
                         early_stopping_counter = 0
                     else:
                         if args.use_early_stopping and args.early_stopping_consider_epochs:
@@ -668,11 +870,16 @@ class ClassificationModel:
                                     logger.info(f" Patience of {args.early_stopping_patience} steps reached")
                                     logger.info(" Training terminated.")
                                     train_iterator.close()
-                                return global_step, tr_loss / global_step
+                                return (
+                                    global_step,
+                                    tr_loss / global_step
+                                    if not self.args.evaluate_during_training
+                                    else training_progress_scores,
+                                )
                 else:
                     if results[args.early_stopping_metric] - best_eval_metric > args.early_stopping_delta:
                         best_eval_metric = results[args.early_stopping_metric]
-                        self._save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
+                        self.save_model(args.best_model_dir, optimizer, scheduler, model=model, results=results)
                         early_stopping_counter = 0
                     else:
                         if args.use_early_stopping and args.early_stopping_consider_epochs:
@@ -687,12 +894,20 @@ class ClassificationModel:
                                     logger.info(f" Patience of {args.early_stopping_patience} steps reached")
                                     logger.info(" Training terminated.")
                                     train_iterator.close()
-                                return global_step, tr_loss / global_step
+                                return (
+                                    global_step,
+                                    tr_loss / global_step
+                                    if not self.args.evaluate_during_training
+                                    else training_progress_scores,
+                                )
 
-        return global_step, tr_loss / global_step
+        return (
+            global_step,
+            tr_loss / global_step if not self.args.evaluate_during_training else training_progress_scores,
+        )
 
     def eval_model(
-        self, eval_df, multi_label=False, output_dir=None, verbose=True, silent=False, wandb_log=True, **kwargs
+            self, eval_df, multi_label=False, output_dir=None, verbose=True, silent=False, wandb_log=True, **kwargs
     ):
         """
         Evaluates the model on eval_df. Saves results to output_dir.
@@ -729,7 +944,8 @@ class ClassificationModel:
         return result, model_outputs, wrong_preds
 
     def evaluate(
-        self, eval_df, output_dir, multi_label=False, prefix="", verbose=True, silent=False, wandb_log=True, **kwargs
+            self, eval_df, output_dir, multi_label=False, prefix="", verbose=True, silent=False, wandb_log=True,
+            **kwargs
     ):
         """
         Evaluates the model on eval_df.
@@ -743,23 +959,44 @@ class ClassificationModel:
 
         results = {}
         if isinstance(eval_df, str) and self.args.lazy_loading:
+            if self.args.model_type == "layoutlm":
+                raise NotImplementedError("Lazy loading is not implemented for LayoutLM models")
             eval_dataset = LazyClassificationDataset(eval_df, self.tokenizer, self.args)
             eval_examples = None
         else:
             if self.args.lazy_loading:
                 raise ValueError("Input must be given as a path to a file when using lazy loading")
+
             if "text" in eval_df.columns and "labels" in eval_df.columns:
-                eval_examples = [
-                    InputExample(i, text, None, label)
-                    for i, (text, label) in enumerate(zip(eval_df["text"].astype(str), eval_df["labels"]))
-                ]
+                if self.args.model_type == "layoutlm":
+                    eval_examples = [
+                        InputExample(i, text, None, label, x0, y0, x1, y1)
+                        for i, (text, label, x0, y0, x1, y1) in enumerate(
+                            zip(
+                                eval_df["text"].astype(str),
+                                eval_df["labels"],
+                                eval_df["x0"],
+                                eval_df["y0"],
+                                eval_df["x1"],
+                                eval_df["y1"],
+                            )
+                        )
+                    ]
+                else:
+                    eval_examples = [
+                        InputExample(i, text, None, label)
+                        for i, (text, label) in enumerate(zip(eval_df["text"].astype(str), eval_df["labels"]))
+                    ]
             elif "text_a" in eval_df.columns and "text_b" in eval_df.columns:
-                eval_examples = [
-                    InputExample(i, text_a, text_b, label)
-                    for i, (text_a, text_b, label) in enumerate(
-                        zip(eval_df["text_a"].astype(str), eval_df["text_b"].astype(str), eval_df["labels"])
-                    )
-                ]
+                if self.args.model_type == "layoutlm":
+                    raise ValueError("LayoutLM cannot be used with sentence-pair tasks")
+                else:
+                    eval_examples = [
+                        InputExample(i, text_a, text_b, label)
+                        for i, (text_a, text_b, label) in enumerate(
+                            zip(eval_df["text_a"].astype(str), eval_df["text_b"].astype(str), eval_df["labels"])
+                        )
+                    ]
             else:
                 warnings.warn(
                     "Dataframe headers not specified. Falling back to using column 0 as text and column 1 as labels."
@@ -782,33 +1019,55 @@ class ClassificationModel:
         eval_sampler = SequentialSampler(eval_dataset)
         eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
 
+        if args.n_gpu > 1:
+            model = torch.nn.DataParallel(model)
+
         eval_loss = 0.0
         nb_eval_steps = 0
-        preds = None
-        out_label_ids = None
+        n_batches = len(eval_dataloader)
+        preds = np.empty((len(eval_dataset), self.num_labels))
+        if multi_label:
+            out_label_ids = np.empty((len(eval_dataset), self.num_labels))
+        else:
+            out_label_ids = np.empty((len(eval_dataset)))
         model.eval()
 
-        for batch in tqdm(eval_dataloader, disable=args.silent or silent, desc="Running Evaluation"):
+        if self.args.fp16:
+            from torch.cuda import amp
+
+        for i, batch in enumerate(tqdm(eval_dataloader, disable=args.silent or silent, desc="Running Evaluation")):
             # batch = tuple(t.to(device) for t in batch)
 
             with torch.no_grad():
                 inputs = self._get_inputs_dict(batch)
 
-                outputs = model(**inputs)
-                tmp_eval_loss, logits = outputs[:2]
+                if self.args.fp16:
+                    with amp.autocast():
+                        outputs = model(**inputs)
+                        tmp_eval_loss, logits = outputs[:2]
+                else:
+                    outputs = model(**inputs)
+                    tmp_eval_loss, logits = outputs[:2]
 
                 if multi_label:
                     logits = logits.sigmoid()
-                eval_loss += tmp_eval_loss.mean().item()
+                if self.args.n_gpu > 1:
+                    tmp_eval_loss = tmp_eval_loss.mean()
+                eval_loss += tmp_eval_loss.item()
 
             nb_eval_steps += 1
 
-            if preds is None:
-                preds = logits.detach().cpu().numpy()
-                out_label_ids = inputs["labels"].detach().cpu().numpy()
-            else:
-                preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-                out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
+            start_index = self.args.eval_batch_size * i
+            end_index = start_index + self.args.eval_batch_size if i != (n_batches - 1) else len(eval_dataset)
+            preds[start_index:end_index] = logits.detach().cpu().numpy()
+            out_label_ids[start_index:end_index] = inputs["labels"].detach().cpu().numpy()
+
+            # if preds is None:
+            #     preds = logits.detach().cpu().numpy()
+            #     out_label_ids = inputs["labels"].detach().cpu().numpy()
+            # else:
+            #     preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+            #     out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
 
         eval_loss = eval_loss / nb_eval_steps
 
@@ -819,7 +1078,7 @@ class ClassificationModel:
                 window_ranges.append([count, count + n_windows])
                 count += n_windows
 
-            preds = [preds[window_range[0] : window_range[1]] for window_range in window_ranges]
+            preds = [preds[window_range[0]: window_range[1]] for window_range in window_ranges]
             out_label_ids = [
                 out_label_ids[i] for i in range(len(out_label_ids)) if i in [window[0] for window in window_ranges]
             ]
@@ -854,7 +1113,9 @@ class ClassificationModel:
                 writer.write("{} = {}\n".format(key, str(result[key])))
 
         if self.args.wandb_project and wandb_log and not multi_label and not self.args.regression:
-            wandb.init(project=args.wandb_project, config={**asdict(args)}, **args.wandb_kwargs)
+            if not wandb.setup().settings.sweep_id:
+                logger.info(" Initializing WandB run for evaluation.")
+                wandb.init(project=args.wandb_project, config={**asdict(args)}, **args.wandb_kwargs)
             if not args.labels_map:
                 self.args.labels_map = {i: i for i in range(self.num_labels)}
 
@@ -862,21 +1123,23 @@ class ClassificationModel:
             inverse_labels_map = {value: key for key, value in self.args.labels_map.items()}
 
             truth = [inverse_labels_map[out] for out in out_label_ids]
-            # ROC
-            wandb.log({"roc": wandb.plots.ROC(truth, model_outputs, labels_list)})
-
-            # Precision Recall
-            wandb.log({"pr": wandb.plots.precision_recall(truth, model_outputs, labels_list)})
 
             # Confusion Matrix
             wandb.sklearn.plot_confusion_matrix(
-                truth, [inverse_labels_map[np.argmax(out)] for out in model_outputs], labels=labels_list,
+                truth, [inverse_labels_map[pred] for pred in preds], labels=labels_list,
             )
+
+            if not self.args.sliding_window:
+                # ROC`
+                wandb.log({"roc": wandb.plots.ROC(truth, model_outputs, labels_list)})
+
+                # Precision Recall
+                wandb.log({"pr": wandb.plots.precision_recall(truth, model_outputs, labels_list)})
 
         return results, model_outputs, wrong
 
     def load_and_cache_examples(
-        self, examples, evaluate=False, no_cache=False, multi_label=False, verbose=True, silent=False
+            self, examples, evaluate=False, no_cache=False, multi_label=False, verbose=True, silent=False
     ):
         """
         Converts a list of InputExample objects to a TensorDataset containing InputFeatures. Caches the InputFeatures.
@@ -909,8 +1172,8 @@ class ClassificationModel:
         )
 
         if os.path.exists(cached_features_file) and (
-            (not args.reprocess_input_data and not no_cache)
-            or (mode == "dev" and args.use_cached_eval_features and not no_cache)
+                (not args.reprocess_input_data and not no_cache)
+                or (mode == "dev" and args.use_cached_eval_features and not no_cache)
         ):
             features = torch.load(cached_features_file)
             if verbose:
@@ -922,7 +1185,7 @@ class ClassificationModel:
                     logger.info(" Sliding window enabled")
 
             # If labels_map is defined, then labels need to be replaced with ints
-            if self.args.labels_map:
+            if self.args.labels_map and not self.args.regression:
                 for example in examples:
                     if multi_label:
                         example.label = [self.args.labels_map[label] for label in example.label]
@@ -954,6 +1217,8 @@ class ClassificationModel:
                 flatten=not evaluate,
                 stride=args.stride,
                 add_prefix_space=bool(args.model_type in ["roberta", "camembert", "xlmroberta", "longformer"]),
+                # avoid padding in case of single example/online inferencing to decrease execution time
+                pad_to_max_length=bool(len(examples) > 1),
                 args=args,
             )
             if verbose and args.sliding_window:
@@ -973,12 +1238,18 @@ class ClassificationModel:
         all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
 
+        if self.args.model_type == "layoutlm":
+            all_bboxes = torch.tensor([f.bboxes for f in features], dtype=torch.long)
+
         if output_mode == "classification":
             all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
         elif output_mode == "regression":
             all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.float)
 
-        dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        if self.args.model_type == "layoutlm":
+            dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids, all_bboxes)
+        else:
+            dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
 
         if args.sliding_window and evaluate:
             return dataset, window_counts
@@ -1007,7 +1278,18 @@ class ClassificationModel:
         for metric, func in kwargs.items():
             extra_metrics[metric] = func(labels, preds)
 
-        mismatched = labels != preds
+        if multi_label:
+            threshold_values = self.args.threshold if self.args.threshold else 0.5
+            if isinstance(threshold_values, list):
+                mismatched = labels != [
+                    [self._threshold(pred, threshold_values[i]) for i, pred in enumerate(example)] for example in preds
+                ]
+            else:
+                mismatched = labels != [
+                    [self._threshold(pred, threshold_values) for pred in example] for example in preds
+                ]
+        else:
+            mismatched = labels != preds
 
         if eval_examples:
             wrong = [i for (i, v) in zip(eval_examples, mismatched) if v.any()]
@@ -1046,129 +1328,191 @@ class ClassificationModel:
         model = self.model
         args = self.args
 
-        self._move_model_to_device()
-        dummy_label = 0 if not self.args.labels_map else next(iter(self.args.labels_map.keys()))
-
-        if multi_label:
-            eval_examples = [
-                InputExample(i, text, None, [dummy_label for i in range(self.num_labels)])
-                for i, text in enumerate(to_predict)
-            ]
-        else:
-            if isinstance(to_predict[0], list):
-                eval_examples = [InputExample(i, text[0], text[1], dummy_label) for i, text in enumerate(to_predict)]
-            else:
-                eval_examples = [InputExample(i, text, None, dummy_label) for i, text in enumerate(to_predict)]
-        if args.sliding_window:
-            eval_dataset, window_counts = self.load_and_cache_examples(eval_examples, evaluate=True, no_cache=True)
-        else:
-            eval_dataset = self.load_and_cache_examples(
-                eval_examples, evaluate=True, multi_label=multi_label, no_cache=True
-            )
-
-        eval_sampler = SequentialSampler(eval_dataset)
-        eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
-
         eval_loss = 0.0
         nb_eval_steps = 0
-        preds = None
-        out_label_ids = None
-
-        if self.config.output_hidden_states:
-            for batch in tqdm(eval_dataloader, disable=args.silent, desc="Running Prediction"):
-                model.eval()
-                # batch = tuple(t.to(device) for t in batch)
-
-                with torch.no_grad():
-                    inputs = self._get_inputs_dict(batch)
-                    outputs = model(**inputs)
-                    tmp_eval_loss, logits = outputs[:2]
-                    embedding_outputs, layer_hidden_states = outputs[2][0], outputs[2][1:]
-
-                    if multi_label:
-                        logits = logits.sigmoid()
-
-                    eval_loss += tmp_eval_loss.mean().item()
-
-                nb_eval_steps += 1
-
-                if preds is None:
-                    preds = logits.detach().cpu().numpy()
-                    out_label_ids = inputs["labels"].detach().cpu().numpy()
-                    all_layer_hidden_states = np.array([state.detach().cpu().numpy() for state in layer_hidden_states])
-                    all_embedding_outputs = embedding_outputs.detach().cpu().numpy()
-                else:
-                    preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-                    out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
-                    all_layer_hidden_states = np.append(
-                        all_layer_hidden_states,
-                        np.array([state.detach().cpu().numpy() for state in layer_hidden_states]),
-                        axis=1,
-                    )
-                    all_embedding_outputs = np.append(
-                        all_embedding_outputs, embedding_outputs.detach().cpu().numpy(), axis=0
-                    )
+        preds = np.empty((len(to_predict), self.num_labels))
+        if multi_label:
+            out_label_ids = np.empty((len(to_predict), self.num_labels))
         else:
-            for batch in tqdm(eval_dataloader, disable=args.silent):
-                model.eval()
-                # batch = tuple(t.to(device) for t in batch)
+            out_label_ids = np.empty((len(to_predict)))
 
-                with torch.no_grad():
-                    inputs = self._get_inputs_dict(batch)
-                    outputs = model(**inputs)
-                    tmp_eval_loss, logits = outputs[:2]
+        if not multi_label and self.args.onnx:
+            model_inputs = self.tokenizer.batch_encode_plus(
+                to_predict, return_tensors="pt", padding=True, truncation=True
+            )
 
-                    if multi_label:
-                        logits = logits.sigmoid()
+            for i, (input_ids, attention_mask) in enumerate(
+                    zip(model_inputs["input_ids"], model_inputs["attention_mask"])
+            ):
+                input_ids = input_ids.unsqueeze(0).detach().cpu().numpy()
+                attention_mask = attention_mask.unsqueeze(0).detach().cpu().numpy()
+                inputs_onnx = {"input_ids": input_ids, "attention_mask": attention_mask}
 
-                    eval_loss += tmp_eval_loss.mean().item()
+                # Run the model (None = get all the outputs)
+                output = self.model.run(None, inputs_onnx)
 
-                nb_eval_steps += 1
-
-                if preds is None:
-                    preds = logits.detach().cpu().numpy()
-                    out_label_ids = inputs["labels"].detach().cpu().numpy()
-                else:
-                    preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-                    out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
-
-        eval_loss = eval_loss / nb_eval_steps
-
-        if args.sliding_window:
-            count = 0
-            window_ranges = []
-            for n_windows in window_counts:
-                window_ranges.append([count, count + n_windows])
-                count += n_windows
-
-            preds = [preds[window_range[0] : window_range[1]] for window_range in window_ranges]
+                preds[i] = output[0]
+                # if preds is None:
+                #     preds = output[0]
+                # else:
+                #     preds = np.append(preds, output[0], axis=0)
 
             model_outputs = preds
+            preds = np.argmax(preds, axis=1)
 
-            preds = [np.argmax(pred, axis=1) for pred in preds]
-            final_preds = []
-            for pred_row in preds:
-                mode_pred, counts = mode(pred_row)
-                if len(counts) > 1 and counts[0] == counts[1]:
-                    final_preds.append(args.tie_value)
-                else:
-                    final_preds.append(mode_pred[0])
-            preds = np.array(final_preds)
-        elif not multi_label and args.regression is True:
-            preds = np.squeeze(preds)
-            model_outputs = preds
         else:
-            model_outputs = preds
+            self._move_model_to_device()
+            dummy_label = 0 if not self.args.labels_map else next(iter(self.args.labels_map.keys()))
+
+            if args.n_gpu > 1:
+                model = torch.nn.DataParallel(model)
+
             if multi_label:
-                if isinstance(args.threshold, list):
-                    threshold_values = args.threshold
-                    preds = [
-                        [self._threshold(pred, threshold_values[i]) for i, pred in enumerate(example)]
-                        for example in preds
+                if isinstance(to_predict[0], list):
+                    eval_examples = [
+                        InputExample(i, text[0], text[1], [dummy_label for i in range(self.num_labels)])
+                        for i, text in enumerate(to_predict)
                     ]
                 else:
-                    preds = [[self._threshold(pred, args.threshold) for pred in example] for example in preds]
+                    eval_examples = [
+                        InputExample(i, text, None, [dummy_label for i in range(self.num_labels)])
+                        for i, text in enumerate(to_predict)
+                    ]
             else:
+                if isinstance(to_predict[0], list):
+                    eval_examples = [
+                        InputExample(i, text[0], text[1], dummy_label) for i, text in enumerate(to_predict)
+                    ]
+                else:
+                    eval_examples = [InputExample(i, text, None, dummy_label) for i, text in enumerate(to_predict)]
+            if args.sliding_window:
+                eval_dataset, window_counts = self.load_and_cache_examples(eval_examples, evaluate=True, no_cache=True)
+                preds = np.empty((len(eval_dataset), self.num_labels))
+                if multi_label:
+                    out_label_ids = np.empty((len(eval_dataset), self.num_labels))
+                else:
+                    out_label_ids = np.empty((len(eval_dataset)))
+            else:
+                eval_dataset = self.load_and_cache_examples(
+                    eval_examples, evaluate=True, multi_label=multi_label, no_cache=True
+                )
+
+            eval_sampler = SequentialSampler(eval_dataset)
+            eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
+
+            if self.args.fp16:
+                from torch.cuda import amp
+
+            if self.config.output_hidden_states:
+                model.eval()
+                preds = None
+                out_label_ids = None
+                for i, batch in enumerate(tqdm(eval_dataloader, disable=args.silent, desc="Running Prediction")):
+                    # batch = tuple(t.to(device) for t in batch)
+                    with torch.no_grad():
+                        inputs = self._get_inputs_dict(batch)
+
+                        if self.args.fp16:
+                            with amp.autocast():
+                                outputs = model(**inputs)
+                                tmp_eval_loss, logits = outputs[:2]
+                        else:
+                            outputs = model(**inputs)
+                            tmp_eval_loss, logits = outputs[:2]
+                        embedding_outputs, layer_hidden_states = outputs[2][0], outputs[2][1:]
+
+                        if multi_label:
+                            logits = logits.sigmoid()
+
+                        if self.args.n_gpu > 1:
+                            tmp_eval_loss = tmp_eval_loss.mean()
+                        eval_loss += tmp_eval_loss.item()
+
+                    nb_eval_steps += 1
+
+                    if preds is None:
+                        preds = logits.detach().cpu().numpy()
+                        out_label_ids = inputs["labels"].detach().cpu().numpy()
+                        all_layer_hidden_states = np.array(
+                            [state.detach().cpu().numpy() for state in layer_hidden_states]
+                        )
+                        all_embedding_outputs = embedding_outputs.detach().cpu().numpy()
+                    else:
+                        preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+                        out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
+                        all_layer_hidden_states = np.append(
+                            all_layer_hidden_states,
+                            np.array([state.detach().cpu().numpy() for state in layer_hidden_states]),
+                            axis=1,
+                        )
+                        all_embedding_outputs = np.append(
+                            all_embedding_outputs, embedding_outputs.detach().cpu().numpy(), axis=0
+                        )
+            else:
+                n_batches = len(eval_dataloader)
+                for i, batch in enumerate(tqdm(eval_dataloader, disable=args.silent)):
+                    model.eval()
+                    # batch = tuple(t.to(device) for t in batch)
+
+                    with torch.no_grad():
+                        inputs = self._get_inputs_dict(batch)
+
+                        if self.args.fp16:
+                            with amp.autocast():
+                                outputs = model(**inputs)
+                                tmp_eval_loss, logits = outputs[:2]
+                        else:
+                            outputs = model(**inputs)
+                            tmp_eval_loss, logits = outputs[:2]
+
+                        if multi_label:
+                            logits = logits.sigmoid()
+
+                        if self.args.n_gpu > 1:
+                            tmp_eval_loss = tmp_eval_loss.mean()
+                        eval_loss += tmp_eval_loss.item()
+
+                    nb_eval_steps += 1
+
+                    start_index = self.args.eval_batch_size * i
+                    end_index = start_index + self.args.eval_batch_size if i != (n_batches - 1) else len(eval_dataset)
+                    preds[start_index:end_index] = logits.detach().cpu().numpy()
+                    out_label_ids[start_index:end_index] = inputs["labels"].detach().cpu().numpy()
+
+                    # if preds is None:
+                    #     preds = logits.detach().cpu().numpy()
+                    #     out_label_ids = inputs["labels"].detach().cpu().numpy()
+                    # else:
+                    #     preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
+                    #     out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
+
+            eval_loss = eval_loss / nb_eval_steps
+
+            if args.sliding_window:
+                count = 0
+                window_ranges = []
+                for n_windows in window_counts:
+                    window_ranges.append([count, count + n_windows])
+                    count += n_windows
+
+                preds = [preds[window_range[0]: window_range[1]] for window_range in window_ranges]
+
+                model_outputs = preds
+
+                preds = [np.argmax(pred, axis=1) for pred in preds]
+                final_preds = []
+                for pred_row in preds:
+                    mode_pred, counts = mode(pred_row)
+                    if len(counts) > 1 and counts[0] == counts[1]:
+                        final_preds.append(args.tie_value)
+                    else:
+                        final_preds.append(mode_pred[0])
+                preds = np.array(final_preds)
+            elif not multi_label and args.regression is True:
+                preds = np.squeeze(preds)
+                model_outputs = preds
+            else:
+                model_outputs = preds
                 preds = np.argmax(preds, axis=1)
 
         if self.args.labels_map and not self.args.regression:
@@ -1179,6 +1523,42 @@ class ClassificationModel:
             return preds, model_outputs, all_embedding_outputs, all_layer_hidden_states
         else:
             return preds, model_outputs
+
+    def convert_to_onnx(self, output_dir=None, set_onnx_arg=True):
+        """Convert the model to ONNX format and save to output_dir
+
+        Args:
+            output_dir (str, optional): If specified, ONNX model will be saved to output_dir (else args.output_dir will be used). Defaults to None.
+            set_onnx_arg (bool, optional): Updates the model args to set onnx=True. Defaults to True.
+        """  # noqa
+        if not output_dir:
+            output_dir = os.path.join(self.args.output_dir, "onnx")
+        os.makedirs(output_dir, exist_ok=True)
+
+        if os.listdir(output_dir):
+            raise ValueError(
+                "Output directory ({}) already exists and is not empty."
+                " Output directory for onnx conversion must be empty.".format(output_dir)
+            )
+
+        onnx_model_name = os.path.join(output_dir, "onnx_model.onnx")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.save_model(output_dir=temp_dir, model=self.model)
+
+            convert(
+                framework="pt",
+                model=temp_dir,
+                tokenizer=self.tokenizer,
+                output=Path(onnx_model_name),
+                pipeline_name="sentiment-analysis",
+                opset=11,
+            )
+
+        self.args.onnx = True
+        self.tokenizer.save_pretrained(output_dir)
+        self.config.save_pretrained(output_dir)
+        self.save_model_args(output_dir)
 
     def _threshold(self, x, threshold):
         if x >= threshold:
@@ -1199,7 +1579,12 @@ class ClassificationModel:
 
             # XLM, DistilBERT and RoBERTa don't use segment_ids
             if self.args.model_type != "distilbert":
-                inputs["token_type_ids"] = batch[2] if self.args.model_type in ["bert", "xlnet", "albert"] else None
+                inputs["token_type_ids"] = (
+                    batch[2] if self.args.model_type in ["bert", "xlnet", "albert", "layoutlm"] else None
+                )
+
+        if self.args.model_type == "layoutlm":
+            inputs["bbox"] = batch[4]
 
         return inputs
 
@@ -1247,7 +1632,7 @@ class ClassificationModel:
 
         return training_progress_scores
 
-    def _save_model(self, output_dir=None, optimizer=None, scheduler=None, model=None, results=None):
+    def save_model(self, output_dir=None, optimizer=None, scheduler=None, model=None, results=None):
         if not output_dir:
             output_dir = self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
@@ -1261,7 +1646,7 @@ class ClassificationModel:
             if optimizer and scheduler and self.args.save_optimizer_and_scheduler:
                 torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
                 torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-            self._save_model_args(output_dir)
+            self.save_model_args(output_dir)
 
         if results:
             output_eval_file = os.path.join(output_dir, "eval_results.txt")
@@ -1269,7 +1654,7 @@ class ClassificationModel:
                 for key in sorted(results.keys()):
                     writer.write("{} = {}\n".format(key, str(results[key])))
 
-    def _save_model_args(self, output_dir):
+    def save_model_args(self, output_dir):
         os.makedirs(output_dir, exist_ok=True)
         self.args.save(output_dir)
 

@@ -1,23 +1,28 @@
 import logging
+import os
+import random
 import warnings
 from multiprocessing import cpu_count
-import random
+
 import numpy as np
-
 import torch
-
 from transformers import (
     WEIGHTS_NAME,
     AlbertConfig,
     AlbertTokenizer,
     BertConfig,
     BertTokenizer,
+    BertweetTokenizer,
+    CamembertConfig,
+    CamembertTokenizer,
     DistilBertConfig,
     DistilBertTokenizer,
     ElectraConfig,
     ElectraTokenizer,
     FlaubertConfig,
     FlaubertTokenizer,
+    LongformerConfig,
+    LongformerTokenizer,
     RobertaConfig,
     RobertaTokenizer,
     XLMConfig,
@@ -29,12 +34,15 @@ from transformers import (
 )
 
 from deepoffense.classification import ClassificationModel
+from deepoffense.classification.classification_utils import sweep_config_to_sweep_values
 from deepoffense.classification.transformer_models.args.model_args import MultiLabelClassificationArgs
-from deepoffense.custom_models.models import BertForMultiLabelSequenceClassification, \
-    RobertaForMultiLabelSequenceClassification, XLNetForMultiLabelSequenceClassification, \
-    XLMForMultiLabelSequenceClassification, DistilBertForMultiLabelSequenceClassification, \
-    AlbertForMultiLabelSequenceClassification, FlaubertForMultiLabelSequenceClassification, \
-    XLMRobertaForMultiLabelSequenceClassification, ElectraForMultiLabelSequenceClassification
+from deepoffense.custom_models.models import AlbertForMultiLabelSequenceClassification, \
+    BertweetForMultiLabelSequenceClassification, CamembertForMultiLabelSequenceClassification, \
+    DistilBertForMultiLabelSequenceClassification, ElectraForMultiLabelSequenceClassification, \
+    FlaubertForMultiLabelSequenceClassification, LongformerForMultiLabelSequenceClassification, \
+    RobertaForMultiLabelSequenceClassification, XLMForMultiLabelSequenceClassification, \
+    XLMRobertaForMultiLabelSequenceClassification, XLNetForMultiLabelSequenceClassification
+from deepoffense.language_modeling.models import BertForMultiLabelSequenceClassification
 
 try:
     import wandb
@@ -74,15 +82,62 @@ class MultiLabelClassificationModel(ClassificationModel):
         """  # noqa: ignore flake8"
 
         MODEL_CLASSES = {
-            "bert": (BertConfig, BertForMultiLabelSequenceClassification, BertTokenizer,),
-            "roberta": (RobertaConfig, RobertaForMultiLabelSequenceClassification, RobertaTokenizer,),
-            "xlnet": (XLNetConfig, XLNetForMultiLabelSequenceClassification, XLNetTokenizer,),
+            "albert": (
+                AlbertConfig,
+                AlbertForMultiLabelSequenceClassification,
+                AlbertTokenizer,
+            ),
+            "bert": (
+                BertConfig,
+                BertForMultiLabelSequenceClassification,
+                BertTokenizer,
+            ),
+            "bertweet": (
+                RobertaConfig,
+                BertweetForMultiLabelSequenceClassification,
+                BertweetTokenizer,
+            ),
+            "camembert": (
+                CamembertConfig,
+                CamembertForMultiLabelSequenceClassification,
+                CamembertTokenizer,
+            ),
+            "distilbert": (
+                DistilBertConfig,
+                DistilBertForMultiLabelSequenceClassification,
+                DistilBertTokenizer,
+            ),
+            "electra": (
+                ElectraConfig,
+                ElectraForMultiLabelSequenceClassification,
+                ElectraTokenizer,
+            ),
+            "flaubert": (
+                FlaubertConfig,
+                FlaubertForMultiLabelSequenceClassification,
+                FlaubertTokenizer,
+            ),
+            "longformer": (
+                LongformerConfig,
+                LongformerForMultiLabelSequenceClassification,
+                LongformerTokenizer,
+            ),
+            "roberta": (
+                RobertaConfig,
+                RobertaForMultiLabelSequenceClassification,
+                RobertaTokenizer,
+            ),
             "xlm": (XLMConfig, XLMForMultiLabelSequenceClassification, XLMTokenizer),
-            "distilbert": (DistilBertConfig, DistilBertForMultiLabelSequenceClassification, DistilBertTokenizer,),
-            "albert": (AlbertConfig, AlbertForMultiLabelSequenceClassification, AlbertTokenizer,),
-            "flaubert": (FlaubertConfig, FlaubertForMultiLabelSequenceClassification, FlaubertTokenizer,),
-            "xlmroberta": (XLMRobertaConfig, XLMRobertaForMultiLabelSequenceClassification, XLMRobertaTokenizer,),
-            "electra": (ElectraConfig, ElectraForMultiLabelSequenceClassification, ElectraTokenizer),
+            "xlmroberta": (
+                XLMRobertaConfig,
+                XLMRobertaForMultiLabelSequenceClassification,
+                XLMRobertaTokenizer,
+            ),
+            "xlnet": (
+                XLNetConfig,
+                XLNetForMultiLabelSequenceClassification,
+                XLNetTokenizer,
+            ),
         }
 
         self.args = self._load_model_args(model_name)
@@ -92,10 +147,16 @@ class MultiLabelClassificationModel(ClassificationModel):
         elif isinstance(args, MultiLabelClassificationArgs):
             self.args = args
 
+        if self.args.thread_count:
+            torch.set_num_threads(self.args.thread_count)
+
         if "sweep_config" in kwargs:
+            self.is_sweeping = True
             sweep_config = kwargs.pop("sweep_config")
-            sweep_values = {key: value["value"] for key, value in sweep_config.as_dict().items() if key != "_wandb"}
+            sweep_values = sweep_config_to_sweep_values(sweep_config)
             self.args.update_from_dict(sweep_values)
+        else:
+            self.is_sweeping = False
 
         if self.args.manual_seed:
             random.seed(self.args.manual_seed)
@@ -109,7 +170,9 @@ class MultiLabelClassificationModel(ClassificationModel):
 
         config_class, model_class, tokenizer_class = MODEL_CLASSES[model_type]
         if num_labels:
-            self.config = config_class.from_pretrained(model_name, num_labels=num_labels, **self.args.config)
+            self.config = config_class.from_pretrained(
+                model_name, num_labels=num_labels, **self.args.config
+            )
             self.num_labels = num_labels
         else:
             self.config = config_class.from_pretrained(model_name, **self.args.config)
@@ -130,23 +193,65 @@ class MultiLabelClassificationModel(ClassificationModel):
         else:
             self.device = "cpu"
 
-        if self.pos_weight:
-            self.model = model_class.from_pretrained(
-                model_name, config=self.config, pos_weight=torch.Tensor(self.pos_weight).to(self.device), **kwargs
-            )
+        if not self.args.quantized_model:
+            if self.pos_weight:
+                self.model = model_class.from_pretrained(
+                    model_name,
+                    config=self.config,
+                    pos_weight=torch.Tensor(self.pos_weight).to(self.device),
+                    **kwargs,
+                )
+            else:
+                self.model = model_class.from_pretrained(
+                    model_name, config=self.config, **kwargs
+                )
         else:
-            self.model = model_class.from_pretrained(model_name, config=self.config, **kwargs)
+            quantized_weights = torch.load(
+                os.path.join(model_name, "pytorch_model.bin")
+            )
+            if self.pos_weight:
+                self.model = model_class.from_pretrained(
+                    None,
+                    config=self.config,
+                    state_dict=quantized_weights,
+                    weight=torch.Tensor(self.pos_weight).to(self.device),
+                )
+            else:
+                self.model = model_class.from_pretrained(
+                    None, config=self.config, state_dict=quantized_weights
+                )
+
+        if self.args.dynamic_quantize:
+            self.model = torch.quantization.quantize_dynamic(
+                self.model, {torch.nn.Linear}, dtype=torch.qint8
+            )
+        if self.args.quantized_model:
+            self.model.load_state_dict(quantized_weights)
+        if self.args.dynamic_quantize:
+            self.args.quantized_model = True
 
         self.results = {}
 
-        self.tokenizer = tokenizer_class.from_pretrained(model_name, do_lower_case=self.args.do_lower_case, **kwargs)
+        self.tokenizer = tokenizer_class.from_pretrained(
+            model_name, do_lower_case=self.args.do_lower_case, **kwargs
+        )
+
+        if self.args.special_tokens_list:
+            self.tokenizer.add_tokens(
+                self.args.special_tokens_list, special_tokens=True
+            )
+            self.model.resize_token_embeddings(len(self.tokenizer))
 
         self.args.model_name = model_name
         self.args.model_type = model_type
 
         if self.args.wandb_project and not wandb_available:
-            warnings.warn("wandb_project specified but wandb is not available. Wandb disabled.")
+            warnings.warn(
+                "wandb_project specified but wandb is not available. Wandb disabled."
+            )
             self.args.wandb_project = None
+
+        self.weight = None  # Not implemented for multilabel
 
     def _load_model_args(self, input_dir):
         args = MultiLabelClassificationArgs()
@@ -175,25 +280,73 @@ class MultiLabelClassificationModel(ClassificationModel):
             **kwargs,
         )
 
-    def eval_model(self, eval_df, multi_label=True, output_dir=None, verbose=False, silent=False, **kwargs):
+    def eval_model(
+        self,
+        eval_df,
+        multi_label=True,
+        output_dir=None,
+        verbose=False,
+        silent=False,
+        **kwargs,
+    ):
         return super().eval_model(
-            eval_df, output_dir=output_dir, multi_label=multi_label, verbose=verbose, silent=silent, **kwargs
+            eval_df,
+            output_dir=output_dir,
+            multi_label=multi_label,
+            verbose=verbose,
+            silent=silent,
+            **kwargs,
         )
 
-    def evaluate(self, eval_df, output_dir, multi_label=True, prefix="", verbose=True, silent=False, **kwargs):
+    def evaluate(
+        self,
+        eval_df,
+        output_dir,
+        multi_label=True,
+        prefix="",
+        verbose=True,
+        silent=False,
+        **kwargs,
+    ):
         return super().evaluate(
-            eval_df, output_dir, multi_label=multi_label, prefix=prefix, verbose=verbose, silent=silent, **kwargs
+            eval_df,
+            output_dir,
+            multi_label=multi_label,
+            prefix=prefix,
+            verbose=verbose,
+            silent=silent,
+            **kwargs,
         )
 
     def load_and_cache_examples(
-        self, examples, evaluate=False, no_cache=False, multi_label=True, verbose=True, silent=False
+        self,
+        examples,
+        evaluate=False,
+        no_cache=False,
+        multi_label=True,
+        verbose=True,
+        silent=False,
     ):
         return super().load_and_cache_examples(
-            examples, evaluate=evaluate, no_cache=no_cache, multi_label=multi_label, verbose=verbose, silent=silent
+            examples,
+            evaluate=evaluate,
+            no_cache=no_cache,
+            multi_label=multi_label,
+            verbose=verbose,
+            silent=silent,
         )
 
-    def compute_metrics(self, preds, labels, eval_examples, multi_label=True, **kwargs):
-        return super().compute_metrics(preds, labels, eval_examples, multi_label=multi_label, **kwargs)
+    def compute_metrics(
+        self, preds, model_outputs, labels, eval_examples, multi_label=True, **kwargs
+    ):
+        return super().compute_metrics(
+            preds,
+            model_outputs,
+            labels,
+            eval_examples,
+            multi_label=multi_label,
+            **kwargs,
+        )
 
     def predict(self, to_predict, multi_label=True):
         return super().predict(to_predict, multi_label=multi_label)

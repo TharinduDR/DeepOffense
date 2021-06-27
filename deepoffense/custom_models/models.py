@@ -8,28 +8,47 @@ from transformers import (
     ElectraForMaskedLM,
     ElectraForPreTraining,
     FlaubertModel,
+    LongformerModel,
     RobertaModel,
     XLMModel,
     XLMPreTrainedModel,
     XLNetModel,
     XLNetPreTrainedModel,
 )
-from transformers.configuration_distilbert import DistilBertConfig
-from transformers.configuration_roberta import RobertaConfig
-from transformers.configuration_xlm_roberta import XLMRobertaConfig
-from transformers.modeling_albert import AlbertConfig, AlbertModel, AlbertPreTrainedModel
-from transformers.modeling_distilbert import DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST
-from transformers.modeling_electra import (
+from transformers.models.camembert.configuration_camembert import CamembertConfig
+from transformers.models.distilbert.configuration_distilbert import DistilBertConfig
+from transformers.models.roberta.configuration_roberta import RobertaConfig
+from transformers.models.xlm_roberta.configuration_xlm_roberta import XLMRobertaConfig
+from transformers.models.albert.modeling_albert import (
+    AlbertConfig,
+    AlbertModel,
+    AlbertPreTrainedModel,
+)
+from transformers.models.distilbert.modeling_distilbert import (
+    DISTILBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+)
+from transformers.models.electra.modeling_electra import (
     ELECTRA_PRETRAINED_MODEL_ARCHIVE_LIST,
     ElectraConfig,
     ElectraModel,
     ElectraPreTrainedModel,
 )
-from transformers.modeling_roberta import ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST, RobertaClassificationHead
+from transformers.models.camembert.modeling_camembert import (
+    CAMEMBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
+)
+from transformers.models.roberta.modeling_roberta import (
+    ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST,
+    RobertaClassificationHead,
+    RobertaForQuestionAnswering,
+)
 from transformers.modeling_utils import PreTrainedModel, SequenceSummary
-from transformers.modeling_xlm_roberta import XLM_ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST
-from transformers.modeling_roberta import RobertaForQuestionAnswering
-
+from transformers.models.xlm_roberta.modeling_xlm_roberta import (
+    XLM_ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST,
+)
+from transformers.models.longformer.modeling_longformer import (
+    LongformerClassificationHead,
+    LongformerPreTrainedModel,
+)
 
 class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
     """
@@ -47,7 +66,13 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
         self.init_weights()
 
     def forward(
-        self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, labels=None,
+        self,
+        input_ids,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        labels=None,
     ):
         outputs = self.bert(
             input_ids,
@@ -62,12 +87,16 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
-        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
+        outputs = (logits,) + outputs[
+            2:
+        ]  # add hidden states and attention if they are here
 
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
@@ -114,10 +143,40 @@ class RobertaForMultiLabelSequenceClassification(BertPreTrainedModel):
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs
+
+
+class BertweetForMultiLabelSequenceClassification(
+    RobertaForMultiLabelSequenceClassification
+):
+    """
+    BERTweet model adapted for multi-label sequence classification.
+    BERTweet shares the Roberta architecture, so we can reuse the simpletransformers
+    RobertaForMultiLabelSequenceClassification implementation
+    """
+
+    base_model_prefix = "bertweet"
+
+
+class CamembertForMultiLabelSequenceClassification(
+    RobertaForMultiLabelSequenceClassification
+):
+    """
+    Camembert model adapted for multi-label sequence classification.
+    Camembert shares the Roberta architecture, so we can reuse the simpletransformers
+    RobertaForMultiLabelSequenceClassification implementation, as it is done in
+    the transformers library
+    (https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_camembert.py).
+    """
+
+    config_class = CamembertConfig
+    pretrained_model_archive_map = CAMEMBERT_PRETRAINED_MODEL_ARCHIVE_LIST
+    base_model_prefix = "camembert"
 
 
 class XLNetForMultiLabelSequenceClassification(XLNetPreTrainedModel):
@@ -164,12 +223,16 @@ class XLNetForMultiLabelSequenceClassification(XLNetPreTrainedModel):
         output = self.sequence_summary(output)
         logits = self.logits_proj(output)
 
-        outputs = (logits,) + transformer_outputs[1:]  # Keep mems, hidden states, attentions if there are in it
+        outputs = (logits,) + transformer_outputs[
+            1:
+        ]  # Keep mems, hidden states, attentions if there are in it
 
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs
@@ -217,20 +280,24 @@ class XLMForMultiLabelSequenceClassification(XLMPreTrainedModel):
         output = transformer_outputs[0]
         logits = self.sequence_summary(output)
 
-        outputs = (logits,) + transformer_outputs[1:]  # Keep new_mems and attention/hidden states if they are here
+        outputs = (logits,) + transformer_outputs[
+            1:
+        ]  # Keep new_mems and attention/hidden states if they are here
 
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs
 
 
 class DistilBertPreTrainedModel(PreTrainedModel):
-    """ An abstract class to handle weights initialization and
-        a simple interface for downloading and loading pretrained models.
+    """An abstract class to handle weights initialization and
+    a simple interface for downloading and loading pretrained models.
     """
 
     config_class = DistilBertConfig
@@ -239,8 +306,7 @@ class DistilBertPreTrainedModel(PreTrainedModel):
     base_model_prefix = "distilbert"
 
     def _init_weights(self, module):
-        """ Initialize the weights.
-        """
+        """Initialize the weights."""
         if isinstance(module, nn.Embedding):
             if module.weight.requires_grad:
                 module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
@@ -271,9 +337,16 @@ class DistilBertForMultiLabelSequenceClassification(DistilBertPreTrainedModel):
         self.init_weights()
 
     def forward(
-        self, input_ids=None, attention_mask=None, head_mask=None, inputs_embeds=None, labels=None,
+        self,
+        input_ids=None,
+        attention_mask=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
     ):
-        distilbert_output = self.distilbert(input_ids=input_ids, attention_mask=attention_mask, head_mask=head_mask)
+        distilbert_output = self.distilbert(
+            input_ids=input_ids, attention_mask=attention_mask, head_mask=head_mask
+        )
         hidden_state = distilbert_output[0]  # (bs, seq_len, dim)
         pooled_output = hidden_state[:, 0]  # (bs, dim)
         pooled_output = self.pre_classifier(pooled_output)  # (bs, dim)
@@ -285,7 +358,9 @@ class DistilBertForMultiLabelSequenceClassification(DistilBertPreTrainedModel):
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs
@@ -333,12 +408,16 @@ class AlbertForMultiLabelSequenceClassification(AlbertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
-        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
+        outputs = (logits,) + outputs[
+            2:
+        ]  # add hidden states and attention if they are here
 
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
@@ -386,18 +465,76 @@ class FlaubertForMultiLabelSequenceClassification(FlaubertModel):
         output = transformer_outputs[0]
         logits = self.sequence_summary(output)
 
-        outputs = (logits,) + transformer_outputs[1:]  # Keep new_mems and attention/hidden states if they are here
+        outputs = (logits,) + transformer_outputs[
+            1:
+        ]  # Keep new_mems and attention/hidden states if they are here
 
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs
 
 
-class XLMRobertaForMultiLabelSequenceClassification(RobertaForMultiLabelSequenceClassification):
+class LongformerForMultiLabelSequenceClassification(LongformerPreTrainedModel):
+    """
+    Longformer model adapted for multilabel sequence classification.
+    """
+
+    def __init__(self, config, pos_weight=None):
+        super(LongformerForMultiLabelSequenceClassification, self).__init__(config)
+        self.num_labels = config.num_labels
+        self.pos_weight = pos_weight
+
+        self.longformer = LongformerModel(config)
+        self.classifier = LongformerClassificationHead(config)
+
+        self.init_weights()
+
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        global_attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        inputs_embeds=None,
+        labels=None,
+    ):
+        if global_attention_mask is None:
+            global_attention_mask = torch.zeros_like(input_ids)
+            # global attention on cls token
+            global_attention_mask[:, 0] = 1
+
+        outputs = self.longformer(
+            input_ids,
+            attention_mask=attention_mask,
+            global_attention_mask=global_attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+        )
+        sequence_output = outputs[0]
+        logits = self.classifier(sequence_output)
+
+        outputs = (logits,) + outputs[2:]
+        if labels is not None:
+            loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
+            labels = labels.float()
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
+            outputs = (loss,) + outputs
+
+        return outputs
+
+
+class XLMRobertaForMultiLabelSequenceClassification(
+    RobertaForMultiLabelSequenceClassification
+):
     config_class = XLMRobertaConfig
     pretrained_model_archive_map = XLM_ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST
 
@@ -435,20 +572,19 @@ class ElectraForLanguageModelingModel(PreTrainedModel):
             self.tie_generator_and_discriminator_embeddings()
 
     def tie_generator_and_discriminator_embeddings(self):
-        gen_embeddings = self.generator_model.electra.embeddings
-        disc_embeddings = self.discriminator_model.electra.embeddings
+        self.discriminator_model.set_input_embeddings(
+            self.generator_model.get_input_embeddings()
+        )
 
-        # tie word, position and token_type embeddings
-        gen_embeddings.word_embeddings.weight = disc_embeddings.word_embeddings.weight
-        gen_embeddings.position_embeddings.weight = disc_embeddings.position_embeddings.weight
-        gen_embeddings.token_type_embeddings.weight = disc_embeddings.token_type_embeddings.weight
-
-    def forward(self, inputs, masked_lm_labels, attention_mask=None, token_type_ids=None):
+    def forward(self, inputs, labels, attention_mask=None, token_type_ids=None):
         d_inputs = inputs.clone()
 
         # run masked LM.
         g_out = self.generator_model(
-            inputs, masked_lm_labels=masked_lm_labels, attention_mask=attention_mask, token_type_ids=token_type_ids
+            inputs,
+            labels=labels,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
 
         # get samples from masked LM.
@@ -459,20 +595,23 @@ class ElectraForLanguageModelingModel(PreTrainedModel):
         sampled_tokens = sampled_tokens.view(d_inputs.shape[0], -1)
 
         # labels have a -100 value to mask out loss from unchanged tokens.
-        mask = masked_lm_labels.ne(-100)
+        mask = labels.ne(-100)
 
         # replace the masked out tokens of the input with the generator predictions.
         d_inputs[mask] = sampled_tokens[mask]
 
         # turn mask into new target labels.  1 (True) for corrupted, 0 otherwise.
         # if the prediction was correct, mark it as uncorrupted.
-        correct_preds = sampled_tokens == masked_lm_labels
+        correct_preds = sampled_tokens == labels
         d_labels = mask.long()
         d_labels[correct_preds] = 0
 
         # run token classification, predict whether each token was corrupted.
         d_out = self.discriminator_model(
-            d_inputs, labels=d_labels, attention_mask=attention_mask, token_type_ids=token_type_ids
+            d_inputs,
+            labels=d_labels,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
 
         g_loss = g_out[0]
@@ -530,7 +669,14 @@ class ElectraForSequenceClassification(ElectraPreTrainedModel):
         labels=None,
     ):
 
-        outputs = self.electra(input_ids, attention_mask, token_type_ids, position_ids, head_mask, inputs_embeds)
+        outputs = self.electra(
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            position_ids,
+            head_mask,
+            inputs_embeds,
+        )
         sequence_output = outputs[0]
         pooled_output = self.pooler(sequence_output)
         pooled_output = self.dropout(pooled_output)
@@ -580,7 +726,14 @@ class ElectraForMultiLabelSequenceClassification(ElectraPreTrainedModel):
         labels=None,
     ):
 
-        outputs = self.electra(input_ids, attention_mask, token_type_ids, position_ids, head_mask, inputs_embeds)
+        outputs = self.electra(
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            position_ids,
+            head_mask,
+            inputs_embeds,
+        )
         sequence_output = outputs[0]
         pooled_output = self.pooler(sequence_output)
         pooled_output = self.dropout(pooled_output)
@@ -590,7 +743,9 @@ class ElectraForMultiLabelSequenceClassification(ElectraPreTrainedModel):
         if labels is not None:
             loss_fct = BCEWithLogitsLoss(pos_weight=self.pos_weight)
             labels = labels.float()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
+            )
             outputs = (loss,) + outputs
 
         return outputs
@@ -626,7 +781,14 @@ class ElectraForQuestionAnswering(ElectraPreTrainedModel):
         end_positions=None,
     ):
 
-        outputs = self.electra(input_ids, attention_mask, token_type_ids, position_ids, head_mask, inputs_embeds)
+        outputs = self.electra(
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            position_ids,
+            head_mask,
+            inputs_embeds,
+        )
         sequence_output = outputs[0]
         logits = self.qa_outputs(sequence_output)
 
@@ -652,7 +814,9 @@ class ElectraForQuestionAnswering(ElectraPreTrainedModel):
             total_loss = (start_loss + end_loss) / 2
             outputs = (total_loss,) + outputs
 
-        return outputs  # (loss), start_logits, end_logits, (hidden_states), (attentions)
+        return (
+            outputs  # (loss), start_logits, end_logits, (hidden_states), (attentions)
+        )
 
 
 class XLMRobertaForQuestionAnswering(RobertaForQuestionAnswering):
