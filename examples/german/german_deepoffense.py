@@ -44,6 +44,8 @@ predictions, raw_outputs = model.predict(testing_texts)
 
 prediction_instances = []
 for id, prediction in zip(testing_ids, predictions):
+    print(prediction)
+    print(type(prediction))
     prediction_instances.append([id, prediction[0], prediction[1], prediction[2]])
 
 
