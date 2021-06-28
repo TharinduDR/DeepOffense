@@ -1,20 +1,14 @@
 import os
-import shutil
-import time
-import csv
-import numpy as np
 import pandas as pd
 import sklearn
 import torch
 from sklearn.model_selection import train_test_split
 
-from deepoffense.classification import ClassificationModel, MultiLabelClassificationModel
-from deepoffense.language_modeling.language_modeling_model import LanguageModelingModel
+from deepoffense.classification import MultiLabelClassificationModel
 from examples.common.evaluation import macro_f1, weighted_f1
-from examples.common.label_converter import decode, encode
-from examples.german.german_deepoffense_config import LANGUAGE_FINETUNE, TEMP_DIRECTORY, SUBMISSION_FOLDER, \
-    MODEL_TYPE, MODEL_NAME, language_modeling_args, args, SEED, RESULT_FILE
-from examples.common.print_stat import print_information
+from examples.german.german_deepoffense_config import TEMP_DIRECTORY, SUBMISSION_FOLDER, \
+    MODEL_TYPE, MODEL_NAME, args, SEED, RESULT_FILE
+
 
 if not os.path.exists(TEMP_DIRECTORY): os.makedirs(TEMP_DIRECTORY)
 if not os.path.exists(os.path.join(TEMP_DIRECTORY, SUBMISSION_FOLDER)): os.makedirs(
