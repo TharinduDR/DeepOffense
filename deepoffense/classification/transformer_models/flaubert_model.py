@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
-from transformers.modeling_flaubert import FlaubertModel
+from transformers.models.flaubert.modeling_flaubert import FlaubertModel
 from transformers.modeling_utils import SequenceSummary
 
 
@@ -70,7 +70,9 @@ class FlaubertForSequenceClassification(FlaubertModel):
         output = transformer_outputs[0]
         logits = self.sequence_summary(output)
 
-        outputs = (logits,) + transformer_outputs[1:]  # Keep new_mems and attention/hidden states if they are here
+        outputs = (logits,) + transformer_outputs[
+            1:
+        ]  # Keep new_mems and attention/hidden states if they are here
 
         if labels is not None:
             if self.num_labels == 1:
@@ -78,7 +80,11 @@ class FlaubertForSequenceClassification(FlaubertModel):
                 loss_fct = MSELoss()
                 loss = loss_fct(logits.view(-1), labels.view(-1))
             else:
-                loss_fct = CrossEntropyLoss(weight=self.weight)
+                if self.weight is not None:
+                    weight = self.weight.to(labels.device)
+                else:
+                    weight = None
+                loss_fct = CrossEntropyLoss(weight=weight)
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             outputs = (loss,) + outputs
 
