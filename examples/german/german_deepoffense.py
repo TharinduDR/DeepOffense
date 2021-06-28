@@ -34,7 +34,7 @@ train.columns = ["text", "labels"]
 train_df, eval_df = train_test_split(train, test_size=0.1, random_state=SEED)
 
 model = MultiLabelClassificationModel(MODEL_TYPE, MODEL_NAME, num_labels=3,  args=args, use_cuda=torch.cuda.is_available())
-model.train_model(train_df, eval_df=eval_df, macro_f1=macro_f1, weighted_f1=weighted_f1, accuracy=sklearn.metrics.accuracy_score)
+model.train_model(train_df, eval_df=eval_df)
 
 model = MultiLabelClassificationModel(MODEL_TYPE, args["best_model_dir"], num_labels=3,  args=args, use_cuda=torch.cuda.is_available())
 
