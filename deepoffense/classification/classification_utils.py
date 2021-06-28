@@ -51,6 +51,16 @@ csv.field_size_limit(2147483647)
 
 logger = logging.getLogger(__name__)
 
+def sweep_config_to_sweep_values(sweep_config):
+    """
+    Converts an instance of wandb.Config to plain values map.
+
+    wandb.Config varies across versions quite significantly,
+    so we use the `keys` method that works consistently.
+    """
+
+    return {key: sweep_config[key] for key in sweep_config.keys()}
+
 
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
