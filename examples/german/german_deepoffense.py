@@ -24,9 +24,9 @@ for index, row in data.iterrows():
 
 testing_ids = []
 testing_texts = []
-for index, row in data.iterrows():
-    testing_ids.append(row["comment_id"])
-    testing_texts.append(row["c_text"])
+for test_index, test_row in test_data.iterrows():
+    testing_ids.append(test_row["comment_id"])
+    testing_texts.append(test_row["c_text"])
 
 train = pd.DataFrame(training_instances)
 train.columns = ["text", "labels"]
