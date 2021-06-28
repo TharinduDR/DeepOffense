@@ -42,6 +42,7 @@ model.train_model(train_df)
 # result, model_outputs, wrong_predictions = model.eval_model(eval_df)
 predictions, raw_outputs = model.predict(testing_texts)
 
+print(predictions)
 prediction_instances = []
 for id, prediction in zip(testing_ids, predictions):
     print(prediction)
