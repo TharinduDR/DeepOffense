@@ -41,8 +41,8 @@ from deepoffense.custom_models.models import AlbertForMultiLabelSequenceClassifi
     DistilBertForMultiLabelSequenceClassification, ElectraForMultiLabelSequenceClassification, \
     FlaubertForMultiLabelSequenceClassification, LongformerForMultiLabelSequenceClassification, \
     RobertaForMultiLabelSequenceClassification, XLMForMultiLabelSequenceClassification, \
-    XLMRobertaForMultiLabelSequenceClassification, XLNetForMultiLabelSequenceClassification
-from deepoffense.language_modeling.models import BertForMultiLabelSequenceClassification
+    XLMRobertaForMultiLabelSequenceClassification, XLNetForMultiLabelSequenceClassification, \
+    BertForMultiLabelSequenceClassification
 
 try:
     import wandb

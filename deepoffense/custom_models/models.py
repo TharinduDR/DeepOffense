@@ -50,6 +50,7 @@ from transformers.models.longformer.modeling_longformer import (
     LongformerPreTrainedModel,
 )
 
+
 class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
     """
     Bert model adapted for multi-label sequence classification
