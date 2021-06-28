@@ -36,7 +36,7 @@ train_df, eval_df = train_test_split(train, test_size=0.1, random_state=SEED)
 model = MultiLabelClassificationModel(MODEL_TYPE, MODEL_NAME, num_labels=3,  args=args, use_cuda=torch.cuda.is_available())
 model.train_model(train_df)
 
-model = MultiLabelClassificationModel(MODEL_TYPE, args["best_model_dir"], num_labels=3,  args=args, use_cuda=torch.cuda.is_available())
+# model = MultiLabelClassificationModel(MODEL_TYPE, args["best_model_dir"], num_labels=3,  args=args, use_cuda=torch.cuda.is_available())
 
 # Evaluate the model
 # result, model_outputs, wrong_predictions = model.eval_model(eval_df)
