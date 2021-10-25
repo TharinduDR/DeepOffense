@@ -8,8 +8,8 @@ DEV_EVAL_FILE = 'dev_eval.txt'
 RESULT_FILE = "result.csv"
 SUBMISSION_FOLDER = "transformers"
 SUBMISSION_FILE = "transformers"
-MODEL_TYPE = "xlmroberta"
-MODEL_NAME = "xlm-roberta-large"
+MODEL_TYPE = "bert"
+MODEL_NAME = "bert-large-cased"
 LANGUAGE_FINETUNE =False
 SEED = 777
 
