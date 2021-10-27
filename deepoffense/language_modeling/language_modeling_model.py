@@ -542,9 +542,9 @@ class LanguageModelingModel:
                 labels = labels.to(self.device)
 
                 if args.model_type == "longformer":
-                    outputs = model(inputs, attention_mask=None, masked_lm_labels=labels)
+                    outputs = model(inputs, attention_mask=None, labels=labels)
                 else:
-                    outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
+                    outputs = model(inputs, labels=labels) if args.mlm else model(inputs, labels=labels)
                 # model outputs are always tuple in pytorch-transformers (see doc)
                 if args.model_type == "electra":
                     g_loss = outputs[0]
