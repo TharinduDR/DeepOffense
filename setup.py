@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="deepoffense",
-    version="0.0.1",
+    version="0.0.2",
     author="Tharindu Ranasinghe",
     author_email="rhtdranasinghe@gmail.com",
     description="Multilingual Offensive Language Identification with Transformers",
