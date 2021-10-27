@@ -843,7 +843,7 @@ class LanguageModelingModel:
             inputs = inputs.to(self.device)
             labels = labels.to(self.device)
             with torch.no_grad():
-                outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
+                outputs = model(inputs, labels=labels) if args.mlm else model(inputs, labels=labels)
                 if args.model_type == "electra":
                     g_loss = outputs[0]
                     d_loss = outputs[1]
