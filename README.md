@@ -1,6 +1,6 @@
 # DeepOffense : Multilingual Offensive Language Identification with Cross-lingual Embeddings
 
-DeepOffense provides state-of-the-art models for multilingual offensive language identification. In this project, we take advantage of English data available by applying cross-lingual contextual word embeddings and transfer learning to make predictions in low resource languages. We project predictions on comparable data in Bengali, Hindi, and Spanish and we report results of 0.8415 F1 macro for Bengali, 0.8568 F1 macro for Hindi, and 0.7513 F1 macro for Spanish.
+DeepOffense provides state-of-the-art transformer models for multilingual offensive language identification. 
 
 ## Installation
 You first need to install PyTorch. THe recommended PyTorch version is 1.5.
