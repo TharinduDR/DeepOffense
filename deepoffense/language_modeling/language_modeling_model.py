@@ -206,9 +206,9 @@ class LanguageModelingModel:
                     self.discriminator_config.vocab_size = len(self.tokenizer)
 
         if self.args.block_size <= 0:
-            self.args.block_size = min(self.args.max_seq_length, self.tokenizer.max_len)
+            self.args.block_size = min(self.args.max_seq_length, self.tokenizer.model_max_length)
         else:
-            self.args.block_size = min(self.args.block_size, self.tokenizer.max_len, self.args.max_seq_length)
+            self.args.block_size = min(self.args.block_size, self.tokenizer.model_max_length, self.args.max_seq_length)
 
         if self.args.model_name:
             if self.args.model_type == "electra":
