@@ -1,4 +1,4 @@
-# DeepOffense : Multilingual Offensive Language Identification with Cross-lingual Embeddings
+# DeepOffense : Multilingual Offensive Language Identification with Transformers
 
 DeepOffense provides state-of-the-art transformer models for multilingual offensive language identification. 
 
