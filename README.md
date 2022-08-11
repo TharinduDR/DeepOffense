@@ -1,3 +1,5 @@
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Downloads](https://pepy.tech/badge/deepoffense)](https://pepy.tech/project/deepoffense)
+
 # DeepOffense : Multilingual Offensive Language Identification with Transformers
 
 DeepOffense provides state-of-the-art transformer models for multilingual offensive language identification. 
